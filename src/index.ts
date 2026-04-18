@@ -200,7 +200,8 @@ const SendEmailSchema = z.object({
     cc: z.array(z.string()).optional().describe("List of CC recipients"),
     bcc: z.array(z.string()).optional().describe("List of BCC recipients"),
     threadId: z.string().optional().describe("Thread ID to reply to"),
-    inReplyTo: z.string().optional().describe("Message ID being replied to"),
+    inReplyTo: z.string().optional().describe("Message ID being replied to (angle brackets optional)"),
+    references: z.union([z.string(), z.array(z.string())]).optional().describe("Message ID(s) for the References header. For long threads, provide an array of all message IDs in the chain. If not provided, defaults to the resolved chain or inReplyTo value."),
     attachments: z.array(z.string()).optional().describe("List of file paths to attach to the email"),
 });
 
@@ -446,8 +447,60 @@ async function main() {
 
         async function handleEmailAction(action: "send" | "draft", validatedArgs: any) {
             let message: string;
-            
+
             try {
+                if (validatedArgs.threadId && !validatedArgs.inReplyTo) {
+                    try {
+                        const threadResponse = await gmail.users.threads.get({
+                            userId: 'me',
+                            id: validatedArgs.threadId,
+                            format: 'metadata',
+                            metadataHeaders: ['Message-ID'],
+                        });
+
+                        const threadMessages = threadResponse.data.messages || [];
+                        const threadMessageIds = threadMessages
+                            .map((msg) => msg.payload?.headers?.find((h) => h.name?.toLowerCase() === 'message-id')?.value)
+                            .filter((value): value is string => Boolean(value));
+
+                        if (threadMessageIds.length > 0) {
+                            validatedArgs.inReplyTo = threadMessageIds[threadMessageIds.length - 1];
+                            validatedArgs.references = threadMessageIds;
+                        }
+                    } catch (threadError: any) {
+                        console.warn(`Warning: Could not fetch thread ${validatedArgs.threadId} for header resolution: ${threadError.message}`);
+                    }
+                }
+
+                if (validatedArgs.inReplyTo) {
+                    try {
+                        const replyToMsg = await gmail.users.messages.get({
+                            userId: 'me',
+                            id: validatedArgs.inReplyTo,
+                            format: 'metadata',
+                            metadataHeaders: ['Message-ID', 'References'],
+                        });
+
+                        const headers = replyToMsg.data.payload?.headers || [];
+                        const messageIdHeader = headers.find(
+                            (h: any) => h.name?.toLowerCase() === 'message-id'
+                        )?.value;
+
+                        if (messageIdHeader) {
+                            const prevReferences = headers.find(
+                                (h: any) => h.name?.toLowerCase() === 'references'
+                            )?.value || '';
+
+                            validatedArgs._resolvedReferences = prevReferences
+                                ? `${prevReferences} ${messageIdHeader}`
+                                : messageIdHeader;
+                            validatedArgs.inReplyTo = messageIdHeader;
+                        }
+                    } catch (e) {
+                        // If fetch fails, inReplyTo might already be a Message-ID — continue as-is
+                    }
+                }
+
                 // Check if we have attachments
                 if (validatedArgs.attachments && validatedArgs.attachments.length > 0) {
                     // Use Nodemailer to create properly formatted RFC822 message
@@ -618,6 +671,7 @@ async function main() {
                     const from = headers.find(h => h.name?.toLowerCase() === 'from')?.value || '';
                     const to = headers.find(h => h.name?.toLowerCase() === 'to')?.value || '';
                     const date = headers.find(h => h.name?.toLowerCase() === 'date')?.value || '';
+                    const messageId = headers.find(h => h.name?.toLowerCase() === 'message-id')?.value || '';
                     const threadId = response.data.threadId || '';
 
                     // Extract email content using the recursive function
@@ -664,7 +718,7 @@ async function main() {
                         content: [
                             {
                                 type: "text",
-                                text: `Thread ID: ${threadId}\nSubject: ${subject}\nFrom: ${from}\nTo: ${to}\nDate: ${date}\n\n${contentTypeNote}${body}${attachmentInfo}`,
+                                text: `Thread ID: ${threadId}\nMessage-ID: ${messageId}\nSubject: ${subject}\nFrom: ${from}\nTo: ${to}\nDate: ${date}\n\n${contentTypeNote}${body}${attachmentInfo}`,
                             },
                         ],
                     };
