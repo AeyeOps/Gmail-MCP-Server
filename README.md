@@ -1,5 +1,10 @@
 # Gmail AutoAuth MCP Server
 
+NOTE: Upstream `GongRzhe/Gmail-MCP-Server` is archived/read-only. For Steve/AeyeOps usage, the maintained source of truth is the fork:
+- `https://github.com/aeyeopsdev/Gmail-MCP-Server`
+
+The runtime package name remains `@gongrzhe/server-gmail-autoauth-mcp` unless/until a new package name is published.
+
 A Model Context Protocol (MCP) server for Gmail integration in Claude Desktop with auto authentication support. This server enables AI assistants to manage Gmail through natural language interactions.
 
 ![](https://badge.mcpx.dev?type=server 'MCP Server')
