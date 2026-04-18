@@ -16,6 +16,23 @@ function encodeEmailHeader(text: string): string {
     return text;
 }
 
+export function formatMessageId(messageId: string): string {
+    const trimmed = messageId.trim();
+    if (trimmed.startsWith('<') && trimmed.endsWith('>')) {
+        return trimmed;
+    }
+
+    return `<${trimmed}>`;
+}
+
+export function formatReferences(references: string | string[]): string {
+    if (Array.isArray(references)) {
+        return references.map(formatMessageId).join(' ');
+    }
+
+    return formatMessageId(references);
+}
+
 export const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
@@ -49,9 +66,14 @@ export function createEmailMessage(validatedArgs: any): string {
         validatedArgs.cc ? `Cc: ${validatedArgs.cc.join(', ')}` : '',
         validatedArgs.bcc ? `Bcc: ${validatedArgs.bcc.join(', ')}` : '',
         `Subject: ${encodedSubject}`,
-        // Add thread-related headers if specified
-        validatedArgs.inReplyTo ? `In-Reply-To: ${validatedArgs.inReplyTo}` : '',
-        validatedArgs.inReplyTo ? `References: ${validatedArgs.inReplyTo}` : '',
+        validatedArgs.inReplyTo ? `In-Reply-To: ${formatMessageId(validatedArgs.inReplyTo)}` : '',
+        validatedArgs.references
+            ? `References: ${formatReferences(validatedArgs.references)}`
+            : validatedArgs._resolvedReferences
+                ? `References: ${formatReferences(validatedArgs._resolvedReferences)}`
+                : validatedArgs.inReplyTo
+                    ? `References: ${formatMessageId(validatedArgs.inReplyTo)}`
+                    : '',
         'MIME-Version: 1.0',
     ].filter(Boolean);
 
@@ -127,6 +149,17 @@ export async function createEmailWithNodemailer(validatedArgs: any): Promise<str
         });
     }
 
+    const formattedInReplyTo = validatedArgs.inReplyTo
+        ? formatMessageId(validatedArgs.inReplyTo)
+        : undefined;
+    const formattedReferences = validatedArgs.references
+        ? formatReferences(validatedArgs.references)
+        : validatedArgs._resolvedReferences
+            ? formatReferences(validatedArgs._resolvedReferences)
+            : validatedArgs.inReplyTo
+                ? formatMessageId(validatedArgs.inReplyTo)
+                : undefined;
+
     const mailOptions = {
         from: 'me', // Gmail API will replace this with the authenticated user
         to: validatedArgs.to.join(', '),
@@ -136,8 +169,8 @@ export async function createEmailWithNodemailer(validatedArgs: any): Promise<str
         text: validatedArgs.body,
         html: validatedArgs.htmlBody,
         attachments: attachments,
-        inReplyTo: validatedArgs.inReplyTo,
-        references: validatedArgs.inReplyTo
+        inReplyTo: formattedInReplyTo,
+        references: formattedReferences
     };
 
     // Generate the raw message
