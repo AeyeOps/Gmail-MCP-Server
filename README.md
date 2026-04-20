@@ -1,14 +1,16 @@
 # Gmail AutoAuth MCP Server
 
-NOTE: Upstream `GongRzhe/Gmail-MCP-Server` is archived/read-only. For Steve/AeyeOps usage, the maintained source of truth is the fork:
-- `https://github.com/aeyeopsdev/Gmail-MCP-Server`
-
-The runtime package name remains `@gongrzhe/server-gmail-autoauth-mcp` unless/until a new package name is published.
+> **Fork notice:** This is the AeyeOps-maintained fork of
+> [`@gongrzhe/server-gmail-autoauth-mcp`](https://github.com/GongRzhe/Gmail-MCP-Server)
+> (upstream archived/read-only). The package is renamed to
+> `@aeyeops/server-gmail-autoauth-mcp` under the AeyeOps scope, preserving the
+> original unscoped name. This fork is **not published to the npm registry** —
+> install locally via `git clone` + `npm run build-and-install` (see
+> [Installing from Source](#installing-from-source) below).
 
 A Model Context Protocol (MCP) server for Gmail integration in Claude Desktop with auto authentication support. This server enables AI assistants to manage Gmail through natural language interactions.
 
 ![](https://badge.mcpx.dev?type=server 'MCP Server')
-[![smithery badge](https://smithery.ai/badge/@gongrzhe/server-gmail-autoauth-mcp)](https://smithery.ai/server/@gongrzhe/server-gmail-autoauth-mcp)
 
 
 ## Features
@@ -35,15 +37,18 @@ A Model Context Protocol (MCP) server for Gmail integration in Claude Desktop wi
 
 ## Installation & Authentication
 
-### Installing via Smithery
+### Installing from Source
 
-To install Gmail AutoAuth for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@gongrzhe/server-gmail-autoauth-mcp):
+This fork is not published to the npm registry. Install it locally by cloning this repo and running the build-and-install script, which runs the test suite, packs the module, and installs the `gmail-mcp` binary globally via `npm install -g`.
 
 ```bash
-npx -y @smithery/cli install @gongrzhe/server-gmail-autoauth-mcp --client claude
+git clone https://github.com/AeyeOps/Gmail-MCP-Server.git
+cd Gmail-MCP-Server
+npm run build-and-install
 ```
 
-### Installing Manually
+Once installed, the `gmail-mcp` binary is available on your `$PATH` and can be referenced directly in MCP client configs (see step 3 below).
+
 1. Create a Google Cloud Project and obtain credentials:
 
    a. Create a Google Cloud Project:
@@ -71,14 +76,14 @@ npx -y @smithery/cli install @gongrzhe/server-gmail-autoauth-mcp --client claude
    mv gcp-oauth.keys.json ~/.gmail-mcp/
 
    # Run authentication from anywhere
-   npx @gongrzhe/server-gmail-autoauth-mcp auth
+   gmail-mcp auth
    ```
 
    b. Local Authentication:
    ```bash
    # Place gcp-oauth.keys.json in your current directory
    # The file will be automatically copied to global config
-   npx @gongrzhe/server-gmail-autoauth-mcp auth
+   gmail-mcp auth
    ```
 
    The authentication process will:
@@ -98,10 +103,8 @@ npx -y @smithery/cli install @gongrzhe/server-gmail-autoauth-mcp --client claude
 {
   "mcpServers": {
     "gmail": {
-      "command": "npx",
-      "args": [
-        "@gongrzhe/server-gmail-autoauth-mcp"
-      ]
+      "command": "gmail-mcp",
+      "args": []
     }
   }
 }
@@ -109,7 +112,11 @@ npx -y @smithery/cli install @gongrzhe/server-gmail-autoauth-mcp --client claude
 
 ### Docker Support
 
-If you prefer using Docker:
+The repo's `Dockerfile` builds from this source tree, so the resulting image IS this fork's code. Since we don't publish images publicly, build one locally first:
+
+```bash
+docker build -t aeyeops-gmail-mcp:local .
+```
 
 1. Authentication:
 ```bash
@@ -119,7 +126,7 @@ docker run -i --rm \
   -e GMAIL_OAUTH_PATH=/gcp-oauth.keys.json \
   -e "GMAIL_CREDENTIALS_PATH=/gmail-server/credentials.json" \
   -p 3000:3000 \
-  mcp/gmail auth
+  aeyeops-gmail-mcp:local auth
 ```
 
 2. Usage:
@@ -136,7 +143,7 @@ docker run -i --rm \
         "mcp-gmail:/gmail-server",
         "-e",
         "GMAIL_CREDENTIALS_PATH=/gmail-server/credentials.json",
-        "mcp/gmail"
+        "aeyeops-gmail-mcp:local"
       ]
     }
   }
@@ -148,7 +155,7 @@ docker run -i --rm \
 For cloud server environments (like n8n), you can specify a custom callback URL during authentication:
 
 ```bash
-npx @gongrzhe/server-gmail-autoauth-mcp auth https://gmail.gongrzhe.com/oauth2callback
+gmail-mcp auth https://gmail.gongrzhe.com/oauth2callback
 ```
 
 #### Setup Instructions for Cloud Environment
@@ -165,7 +172,7 @@ npx @gongrzhe/server-gmail-autoauth-mcp auth https://gmail.gongrzhe.com/oauth2ca
 
 4. **Run Authentication:**
    ```bash
-   npx @gongrzhe/server-gmail-autoauth-mcp auth https://gmail.gongrzhe.com/oauth2callback
+   gmail-mcp auth https://gmail.gongrzhe.com/oauth2callback
    ```
 
 5. **Configure in your application:**
@@ -173,10 +180,8 @@ npx @gongrzhe/server-gmail-autoauth-mcp auth https://gmail.gongrzhe.com/oauth2ca
    {
      "mcpServers": {
        "gmail": {
-         "command": "npx",
-         "args": [
-           "@gongrzhe/server-gmail-autoauth-mcp"
-         ]
+         "command": "gmail-mcp",
+         "args": []
        }
      }
    }

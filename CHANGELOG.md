@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-04-20
+
+### Changed
+
+- Rewrote README to reflect the fork-only install path. Removed the Smithery
+  badge and install block (this fork isn't on Smithery), replaced all
+  `npx @gongrzhe/server-gmail-autoauth-mcp` install/auth commands with the
+  local `gmail-mcp` binary (installed via `npm run build-and-install`), and
+  retrofitted the Docker section to build from this repo's `Dockerfile` into
+  a local `aeyeops-gmail-mcp:local` tag instead of pulling the upstream
+  `mcp/gmail` image. Fork notice at the top of README now matches the one
+  in `llms-install.md`.
+
 ## [1.3.0] - 2026-04-20
 
 ### Changed
