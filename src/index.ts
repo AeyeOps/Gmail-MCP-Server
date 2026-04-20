@@ -19,6 +19,7 @@ import os from 'os';
 import {createEmailMessage, createEmailWithNodemailer} from "./utl.js";
 import { createLabel, updateLabel, deleteLabel, listLabels, findLabelByName, getOrCreateLabel, GmailLabel } from "./label-manager.js";
 import { createFilter, listFilters, getFilter, deleteFilter, filterTemplates, GmailFilterCriteria, GmailFilterAction } from "./filter-manager.js";
+import { resolveThreadHeaders, resolveReplyHeaders, extractMessageId } from "./threading.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -450,54 +451,18 @@ async function main() {
 
             try {
                 if (validatedArgs.threadId && !validatedArgs.inReplyTo) {
-                    try {
-                        const threadResponse = await gmail.users.threads.get({
-                            userId: 'me',
-                            id: validatedArgs.threadId,
-                            format: 'metadata',
-                            metadataHeaders: ['Message-ID'],
-                        });
-
-                        const threadMessages = threadResponse.data.messages || [];
-                        const threadMessageIds = threadMessages
-                            .map((msg) => msg.payload?.headers?.find((h) => h.name?.toLowerCase() === 'message-id')?.value)
-                            .filter((value): value is string => Boolean(value));
-
-                        if (threadMessageIds.length > 0) {
-                            validatedArgs.inReplyTo = threadMessageIds[threadMessageIds.length - 1];
-                            validatedArgs.references = threadMessageIds;
-                        }
-                    } catch (threadError: any) {
-                        console.warn(`Warning: Could not fetch thread ${validatedArgs.threadId} for header resolution: ${threadError.message}`);
+                    const resolved = await resolveThreadHeaders(gmail, validatedArgs.threadId);
+                    if (resolved) {
+                        validatedArgs.inReplyTo = resolved.inReplyTo;
+                        validatedArgs.references = resolved.references;
                     }
                 }
 
                 if (validatedArgs.inReplyTo) {
-                    try {
-                        const replyToMsg = await gmail.users.messages.get({
-                            userId: 'me',
-                            id: validatedArgs.inReplyTo,
-                            format: 'metadata',
-                            metadataHeaders: ['Message-ID', 'References'],
-                        });
-
-                        const headers = replyToMsg.data.payload?.headers || [];
-                        const messageIdHeader = headers.find(
-                            (h: any) => h.name?.toLowerCase() === 'message-id'
-                        )?.value;
-
-                        if (messageIdHeader) {
-                            const prevReferences = headers.find(
-                                (h: any) => h.name?.toLowerCase() === 'references'
-                            )?.value || '';
-
-                            validatedArgs._resolvedReferences = prevReferences
-                                ? `${prevReferences} ${messageIdHeader}`
-                                : messageIdHeader;
-                            validatedArgs.inReplyTo = messageIdHeader;
-                        }
-                    } catch (e) {
-                        // If fetch fails, inReplyTo might already be a Message-ID — continue as-is
+                    const resolved = await resolveReplyHeaders(gmail, validatedArgs.inReplyTo);
+                    if (resolved) {
+                        validatedArgs.inReplyTo = resolved.inReplyTo;
+                        validatedArgs._resolvedReferences = resolved.resolvedReferences;
                     }
                 }
 
@@ -671,7 +636,7 @@ async function main() {
                     const from = headers.find(h => h.name?.toLowerCase() === 'from')?.value || '';
                     const to = headers.find(h => h.name?.toLowerCase() === 'to')?.value || '';
                     const date = headers.find(h => h.name?.toLowerCase() === 'date')?.value || '';
-                    const messageId = headers.find(h => h.name?.toLowerCase() === 'message-id')?.value || '';
+                    const messageId = extractMessageId(headers);
                     const threadId = response.data.threadId || '';
 
                     // Extract email content using the recursive function
