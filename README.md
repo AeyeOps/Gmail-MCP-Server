@@ -3,10 +3,9 @@
 > **Fork notice:** This is the AeyeOps-maintained fork of
 > [`@gongrzhe/server-gmail-autoauth-mcp`](https://github.com/GongRzhe/Gmail-MCP-Server)
 > (upstream archived/read-only). The package is renamed to
-> `@aeyeops/server-gmail-autoauth-mcp` under the AeyeOps scope, preserving the
-> original unscoped name. This fork is **not published to the npm registry** —
-> install locally via `git clone` + `npm run build-and-install` (see
-> [Installing from Source](#installing-from-source) below).
+> `@aeyeops/server-gmail-autoauth-mcp`. Prebuilt standalone binaries (no Node
+> required) are published on the [Releases page](https://github.com/AeyeOps/Gmail-MCP-Server/releases/latest)
+> — see [Install](#install) below.
 
 A Model Context Protocol (MCP) server for Gmail integration in Claude Desktop with auto authentication support. This server enables AI assistants to manage Gmail through natural language interactions.
 
@@ -36,19 +35,55 @@ A Model Context Protocol (MCP) server for Gmail integration in Claude Desktop wi
 - Support for both Desktop and Web application credentials
 - Global credential storage for convenience
 
-## Installation & Authentication
+## Install
 
-### Installing from Source
+### Option 1: Prebuilt binary (recommended)
 
-This fork is not published to the npm registry. Install it locally by cloning this repo and running the build-and-install script, which runs the test suite, packs the module, and installs the `gmail-mcp` binary globally via `npm install -g`.
+Self-contained executable — no Node, npm, or TypeScript toolchain needed on the host.
+
+**Linux x64:**
+```bash
+curl -L https://github.com/AeyeOps/Gmail-MCP-Server/releases/latest/download/gmail-mcp-linux-x64 \
+  -o ~/.local/bin/gmail-mcp && chmod +x ~/.local/bin/gmail-mcp
+```
+
+**Linux arm64** (NVIDIA Jetson/Grace, Raspberry Pi 4+):
+```bash
+curl -L https://github.com/AeyeOps/Gmail-MCP-Server/releases/latest/download/gmail-mcp-linux-arm64 \
+  -o ~/.local/bin/gmail-mcp && chmod +x ~/.local/bin/gmail-mcp
+```
+
+**macOS arm64** (Apple Silicon):
+```bash
+curl -L https://github.com/AeyeOps/Gmail-MCP-Server/releases/latest/download/gmail-mcp-darwin-arm64 \
+  -o ~/.local/bin/gmail-mcp && chmod +x ~/.local/bin/gmail-mcp
+```
+
+**Windows x64** (PowerShell):
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.local\bin" | Out-Null
+Invoke-WebRequest -UseBasicParsing `
+  -Uri https://github.com/AeyeOps/Gmail-MCP-Server/releases/latest/download/gmail-mcp-windows-x64.exe `
+  -OutFile "$env:USERPROFILE\.local\bin\gmail-mcp.exe"
+```
+
+Make sure `~/.local/bin` (Linux/macOS) or `%USERPROFILE%\.local\bin` (Windows) is on your `PATH`.
+
+See [all releases](https://github.com/AeyeOps/Gmail-MCP-Server/releases) for previous versions.
+
+### Option 2: Build from source (fallback)
+
+Use this only if no binary exists for your platform, or you're hacking on the server.
 
 ```bash
 git clone https://github.com/AeyeOps/Gmail-MCP-Server.git
 cd Gmail-MCP-Server
-npm run build-and-install
+npm run build-and-install   # runs tests, packs, then npm install -g the tarball
 ```
 
-Once installed, the `gmail-mcp` binary is available on your `$PATH` and can be referenced directly in MCP client configs (see step 3 below).
+The `gmail-mcp` binary ends up on your `$PATH` (via npm's global prefix). Requires Node 18+ and npm.
+
+## Authentication
 
 1. Create a Google Cloud Project and obtain credentials:
 
@@ -98,20 +133,49 @@ Once installed, the `gmail-mcp` binary is available on your `$PATH` and can be r
    > - Both Desktop app and Web application credentials are supported
    > - For Web application credentials, make sure to add `http://localhost:3000/oauth2callback` to your authorized redirect URIs
 
-3. Configure in Claude Desktop:
+## Configure your MCP client
+
+Once `gmail-mcp` is on your `PATH` and you've completed authentication, add it to your MCP client config.
+
+**Claude Code / Claude Desktop (Linux/macOS):**
 
 ```json
 {
   "mcpServers": {
     "gmail": {
       "command": "gmail-mcp",
-      "args": []
+      "args": [],
+      "env": {
+        "GMAIL_OAUTH_PATH": "~/.gmail-mcp/gcp-oauth.keys.json",
+        "GMAIL_CREDENTIALS_PATH": "~/.gmail-mcp/credentials.json"
+      }
     }
   }
 }
 ```
 
-### Docker Support
+**Windows** — use an absolute path for `command` (PATHEXT resolution through Node's spawn isn't reliable):
+
+```json
+{
+  "mcpServers": {
+    "gmail": {
+      "command": "C:/Users/<you>/.local/bin/gmail-mcp.exe",
+      "args": [],
+      "env": {
+        "GMAIL_OAUTH_PATH": "C:/Users/<you>/.gmail-mcp/gcp-oauth.keys.json",
+        "GMAIL_CREDENTIALS_PATH": "C:/Users/<you>/.gmail-mcp/credentials.json"
+      }
+    }
+  }
+}
+```
+
+Omit `env` if you're happy with the default paths (`~/.gmail-mcp/...`).
+
+Want a second Gmail account alongside your primary? Add another entry — e.g. `gmail-work` — pointing at a separate creds directory (say `~/.gmail-work-mcp/`) and the same `gmail-mcp` binary.
+
+## Docker support
 
 The repo's `Dockerfile` builds from this source tree, so the resulting image IS this fork's code. Since we don't publish images publicly, build one locally first:
 
