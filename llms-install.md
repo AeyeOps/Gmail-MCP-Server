@@ -1,6 +1,6 @@
 # Gmail AutoAuth MCP Installation Guide
 
-NOTE: For Steve/AeyeOps usage, the maintained source of truth is the fork `AeyeOps/Gmail-MCP-Server` because the original upstream repo is archived/read-only. The runtime package is `@aeyeops/server-gmail-autoauth-mcp` — a scoped rename of `@gongrzhe/server-gmail-autoauth-mcp` to reflect AeyeOps as the fork maintainer.
+NOTE: The maintained source of truth for AeyeOps is the fork `AeyeOps/Gmail-MCP-Server` because the original upstream repo is archived/read-only. The runtime package is `@aeyeops/server-gmail-autoauth-mcp` — a scoped rename of `@gongrzhe/server-gmail-autoauth-mcp` to reflect AeyeOps as the fork maintainer.
 
 This guide will help you install and configure the Gmail AutoAuth MCP server for managing Gmail operations through Claude Desktop with auto authentication support.
 

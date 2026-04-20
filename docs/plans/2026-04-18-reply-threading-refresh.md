@@ -181,7 +181,7 @@ Run: `git push -u origin fix/reply-threading-refresh`
 Expected: branch published to fork.
 
 Step 5: Optional PR creation
-Run: `gh pr create --repo aeyeopsdev/Gmail-MCP-Server --base main --head fix/reply-threading-refresh --draft --title "fix: refresh reply threading support" --body "Refresh fork from latest upstream main and port server-side reply-threading fixes only."`
+Run: `gh pr create --repo AeyeOps/Gmail-MCP-Server --base main --head fix/reply-threading-refresh --draft --title "fix: refresh reply threading support" --body "Refresh fork from latest upstream main and port server-side reply-threading fixes only."`
 Expected: draft PR created in fork.
 
 ---
