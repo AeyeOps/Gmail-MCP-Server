@@ -20,7 +20,7 @@ import {createEmailMessage, createEmailWithNodemailer} from "./utl.js";
 import { createLabel, updateLabel, deleteLabel, listLabels, findLabelByName, getOrCreateLabel, GmailLabel } from "./label-manager.js";
 import { createFilter, listFilters, getFilter, deleteFilter, filterTemplates, GmailFilterCriteria, GmailFilterAction } from "./filter-manager.js";
 import { resolveThreadHeaders, resolveReplyHeaders, extractMessageId } from "./threading.js";
-import { updateDraft, deleteDraft } from "./drafts.js";
+import { updateDraft, deleteDraft, listDrafts, getDraft } from "./drafts.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -215,6 +215,15 @@ const DeleteDraftSchema = z.object({
     draftId: z.string().describe("The draft ID to delete (from drafts.list or a prior draft_email response)"),
 });
 
+const ListDraftsSchema = z.object({
+    maxResults: z.number().optional().describe("Maximum number of drafts to return (default 20)"),
+    q: z.string().optional().describe("Gmail search query to filter drafts (same syntax as search_emails)"),
+});
+
+const GetDraftSchema = z.object({
+    draftId: z.string().describe("The draft ID (from list_drafts or a prior draft_email / update_draft response)"),
+});
+
 const ReadEmailSchema = z.object({
     messageId: z.string().describe("ID of the email message to retrieve"),
 });
@@ -233,7 +242,7 @@ const ModifyEmailSchema = z.object({
 });
 
 const DeleteEmailSchema = z.object({
-    messageId: z.string().describe("ID of the email message to delete"),
+    messageId: z.string().describe("ID of the email message to move to Trash"),
 });
 
 // New schema for listing email labels
@@ -272,7 +281,7 @@ const BatchModifyEmailsSchema = z.object({
 });
 
 const BatchDeleteEmailsSchema = z.object({
-    messageIds: z.array(z.string()).describe("List of message IDs to delete"),
+    messageIds: z.array(z.string()).describe("List of message IDs to move to Trash"),
     batchSize: z.number().optional().default(50).describe("Number of messages to process in each batch (default: 50)"),
 });
 
@@ -371,8 +380,18 @@ async function main() {
             },
             {
                 name: "delete_draft",
-                description: "Permanently deletes a draft by ID. Unlike delete_email (which requires full mail.google.com scope for permanent message deletion), delete_draft only needs gmail.modify and works on unsent drafts.",
+                description: "Permanently deletes a draft by ID. Unlike delete_email (which moves messages to Trash), delete_draft removes the draft outright. Works on gmail.modify scope.",
                 inputSchema: zodToJsonSchema(DeleteDraftSchema),
+            },
+            {
+                name: "list_drafts",
+                description: "Lists drafts in the mailbox. Returns an array of {draftId, messageId, threadId}. Use draftId with get_draft, update_draft, or delete_draft. Supports Gmail search syntax via optional q parameter.",
+                inputSchema: zodToJsonSchema(ListDraftsSchema),
+            },
+            {
+                name: "get_draft",
+                description: "Retrieves the full content of a draft by ID, including headers, body, and attachment metadata. Parallel to read_email but for unsent drafts.",
+                inputSchema: zodToJsonSchema(GetDraftSchema),
             },
             {
                 name: "read_email",
@@ -391,7 +410,7 @@ async function main() {
             },
             {
                 name: "delete_email",
-                description: "Permanently deletes an email",
+                description: "Moves an email to Trash. Recoverable from Trash folder; Gmail auto-purges after 30 days. Uses gmail.modify scope (unlike permanent deletion which requires full mail.google.com access).",
                 inputSchema: zodToJsonSchema(DeleteEmailSchema),
             },
             {
@@ -406,7 +425,7 @@ async function main() {
             },
             {
                 name: "batch_delete_emails",
-                description: "Permanently deletes multiple emails in batches",
+                description: "Moves multiple emails to Trash in batches. Recoverable from Trash; Gmail auto-purges after 30 days.",
                 inputSchema: zodToJsonSchema(BatchDeleteEmailsSchema),
             },
             {
@@ -668,6 +687,41 @@ async function main() {
                     };
                 }
 
+                case "list_drafts": {
+                    const validatedArgs = ListDraftsSchema.parse(args);
+                    const drafts = await listDrafts(gmail, validatedArgs);
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: JSON.stringify(drafts, null, 2),
+                            },
+                        ],
+                    };
+                }
+
+                case "get_draft": {
+                    const validatedArgs = GetDraftSchema.parse(args);
+                    const draft = await getDraft(gmail, validatedArgs.draftId);
+                    const headerLines = ['from', 'to', 'cc', 'bcc', 'subject', 'date']
+                        .filter(k => draft.headers[k] !== undefined)
+                        .map(k => `${k.charAt(0).toUpperCase() + k.slice(1)}: ${draft.headers[k]}`)
+                        .join('\n');
+                    const attachmentInfo = draft.attachments.length > 0 ?
+                        `\n\nAttachments (${draft.attachments.length}):\n` +
+                        draft.attachments.map(a =>
+                            `- ${a.filename} (${a.mimeType}, ${Math.round(a.size / 1024)} KB${a.attachmentId ? `, ID: ${a.attachmentId}` : ''})`
+                        ).join('\n') : '';
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Draft ID: ${draft.draftId}\nThread ID: ${draft.threadId}\n${headerLines}\n\n${draft.body}${attachmentInfo}`,
+                            },
+                        ],
+                    };
+                }
+
                 case "read_email": {
                     const validatedArgs = ReadEmailSchema.parse(args);
                     const response = await gmail.users.messages.get({
@@ -810,7 +864,7 @@ async function main() {
 
                 case "delete_email": {
                     const validatedArgs = DeleteEmailSchema.parse(args);
-                    await gmail.users.messages.delete({
+                    await gmail.users.messages.trash({
                         userId: 'me',
                         id: validatedArgs.messageId,
                     });
@@ -819,7 +873,7 @@ async function main() {
                         content: [
                             {
                                 type: "text",
-                                text: `Email ${validatedArgs.messageId} deleted successfully`,
+                                text: `Email ${validatedArgs.messageId} moved to Trash`,
                             },
                         ],
                     };
@@ -914,7 +968,7 @@ async function main() {
                         async (batch) => {
                             const results = await Promise.all(
                                 batch.map(async (messageId) => {
-                                    await gmail.users.messages.delete({
+                                    await gmail.users.messages.trash({
                                         userId: 'me',
                                         id: messageId,
                                     });
@@ -929,11 +983,11 @@ async function main() {
                     const successCount = successes.length;
                     const failureCount = failures.length;
                     
-                    let resultText = `Batch delete operation complete.\n`;
-                    resultText += `Successfully deleted: ${successCount} messages\n`;
-                    
+                    let resultText = `Batch trash operation complete.\n`;
+                    resultText += `Successfully moved to Trash: ${successCount} messages\n`;
+
                     if (failureCount > 0) {
-                        resultText += `Failed to delete: ${failureCount} messages\n\n`;
+                        resultText += `Failed to move: ${failureCount} messages\n\n`;
                         resultText += `Failed message IDs:\n`;
                         resultText += failures.map(f => `- ${(f.item as string).substring(0, 16)}... (${f.error.message})`).join('\n');
                     }

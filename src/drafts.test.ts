@@ -1,15 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { updateDraft, deleteDraft } from './drafts.js';
+import { updateDraft, deleteDraft, listDrafts, getDraft } from './drafts.js';
 
 function createMockGmail() {
     return {
         users: {
             threads: { get: vi.fn() },
             messages: { get: vi.fn() },
-            drafts: { update: vi.fn(), delete: vi.fn() },
+            drafts: {
+                update: vi.fn(),
+                delete: vi.fn(),
+                list: vi.fn(),
+                get: vi.fn(),
+            },
         },
     };
+}
+
+function encodeBase64Url(s: string): string {
+    return Buffer.from(s, 'utf-8').toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
 }
 
 function msg(headers: Array<{ name: string; value: string }>) {
@@ -169,5 +181,167 @@ describe('deleteDraft', () => {
         gmail.users.drafts.delete.mockRejectedValue(new Error('draft not found'));
 
         await expect(deleteDraft(gmail, 'missing-draft')).rejects.toThrow('draft not found');
+    });
+});
+
+describe('listDrafts', () => {
+    let gmail: ReturnType<typeof createMockGmail>;
+
+    beforeEach(() => {
+        gmail = createMockGmail();
+    });
+
+    it('calls gmail.users.drafts.list with the expected argument shape', async () => {
+        gmail.users.drafts.list.mockResolvedValue({ data: { drafts: [] } });
+
+        await listDrafts(gmail, { maxResults: 50, q: 'subject:hello' });
+
+        expect(gmail.users.drafts.list).toHaveBeenCalledTimes(1);
+        expect(gmail.users.drafts.list).toHaveBeenCalledWith({
+            userId: 'me',
+            maxResults: 50,
+            q: 'subject:hello',
+        });
+    });
+
+    it('defaults maxResults to 20 and omits q when not provided', async () => {
+        gmail.users.drafts.list.mockResolvedValue({ data: { drafts: [] } });
+
+        await listDrafts(gmail, {});
+
+        const call = gmail.users.drafts.list.mock.calls[0][0];
+        expect(call.userId).toBe('me');
+        expect(call.maxResults).toBe(20);
+        expect('q' in call).toBe(false);
+    });
+
+    it('returns a simplified array mapping id/message.id/message.threadId', async () => {
+        gmail.users.drafts.list.mockResolvedValue({
+            data: {
+                drafts: [
+                    { id: 'r-1', message: { id: 'm-1', threadId: 't-1' } },
+                    { id: 'r-2', message: { id: 'm-2', threadId: 't-2' } },
+                ],
+            },
+        });
+
+        const result = await listDrafts(gmail, {});
+
+        expect(result).toEqual([
+            { draftId: 'r-1', messageId: 'm-1', threadId: 't-1' },
+            { draftId: 'r-2', messageId: 'm-2', threadId: 't-2' },
+        ]);
+    });
+
+    it('propagates errors from gmail.users.drafts.list', async () => {
+        gmail.users.drafts.list.mockRejectedValue(new Error('list failed'));
+
+        await expect(listDrafts(gmail, {})).rejects.toThrow('list failed');
+    });
+});
+
+describe('getDraft', () => {
+    let gmail: ReturnType<typeof createMockGmail>;
+
+    beforeEach(() => {
+        gmail = createMockGmail();
+    });
+
+    it('calls gmail.users.drafts.get with the expected argument shape', async () => {
+        gmail.users.drafts.get.mockResolvedValue({
+            data: { id: 'r-1', message: { threadId: 't-1', payload: { headers: [] } } },
+        });
+
+        await getDraft(gmail, 'r-1');
+
+        expect(gmail.users.drafts.get).toHaveBeenCalledTimes(1);
+        expect(gmail.users.drafts.get).toHaveBeenCalledWith({
+            userId: 'me',
+            id: 'r-1',
+            format: 'full',
+        });
+    });
+
+    it('extracts headers, plain-text body, and attachments from a full payload', async () => {
+        gmail.users.drafts.get.mockResolvedValue({
+            data: {
+                id: 'r-1',
+                message: {
+                    threadId: 't-1',
+                    payload: {
+                        headers: [
+                            { name: 'From', value: 'sender@example.com' },
+                            { name: 'To', value: 'recipient@example.com' },
+                            { name: 'Cc', value: 'cc@example.com' },
+                            { name: 'Subject', value: 'Draft subject' },
+                            { name: 'Date', value: 'Mon, 01 Jan 2026 00:00:00 +0000' },
+                            { name: 'X-Ignored', value: 'should be omitted' },
+                        ],
+                        parts: [
+                            {
+                                mimeType: 'text/plain',
+                                body: { data: encodeBase64Url('Hello plain') },
+                            },
+                            {
+                                mimeType: 'text/html',
+                                body: { data: encodeBase64Url('<p>Hello html</p>') },
+                            },
+                            {
+                                mimeType: 'application/pdf',
+                                filename: 'report.pdf',
+                                body: { attachmentId: 'att-1', size: 2048 },
+                            },
+                        ],
+                    },
+                },
+            },
+        });
+
+        const result = await getDraft(gmail, 'r-1');
+
+        expect(result.draftId).toBe('r-1');
+        expect(result.threadId).toBe('t-1');
+        expect(result.headers).toEqual({
+            from: 'sender@example.com',
+            to: 'recipient@example.com',
+            cc: 'cc@example.com',
+            subject: 'Draft subject',
+            date: 'Mon, 01 Jan 2026 00:00:00 +0000',
+        });
+        expect(result.headers['x-ignored']).toBeUndefined();
+        expect(result.body).toBe('Hello plain');
+        expect(result.attachments).toEqual([
+            {
+                filename: 'report.pdf',
+                mimeType: 'application/pdf',
+                size: 2048,
+                attachmentId: 'att-1',
+            },
+        ]);
+    });
+
+    it('falls back to HTML body when no plain-text part exists', async () => {
+        gmail.users.drafts.get.mockResolvedValue({
+            data: {
+                id: 'r-2',
+                message: {
+                    threadId: 't-2',
+                    payload: {
+                        headers: [{ name: 'Subject', value: 'HTML only' }],
+                        mimeType: 'text/html',
+                        body: { data: encodeBase64Url('<p>html body</p>') },
+                    },
+                },
+            },
+        });
+
+        const result = await getDraft(gmail, 'r-2');
+        expect(result.body).toBe('<p>html body</p>');
+    });
+
+    it('propagates errors from gmail.users.drafts.get', async () => {
+        gmail.users.drafts.get.mockRejectedValue(new Error('draft not found'));
+
+        await expect(getDraft(gmail, 'missing')).rejects.toThrow('draft not found');
     });
 });

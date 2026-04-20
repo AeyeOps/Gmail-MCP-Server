@@ -1,6 +1,6 @@
 {
   "name": "@aeyeops/server-gmail-autoauth-mcp",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "description": "Gmail MCP server with auto authentication support",
   "type": "module",
   "main": "dist/index.js",
@@ -41,12 +41,12 @@
   "license": "ISC",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/aeyeopsdev/Gmail-MCP-Server.git"
+    "url": "git+https://github.com/AeyeOps/Gmail-MCP-Server.git"
   },
   "bugs": {
-    "url": "https://github.com/aeyeopsdev/Gmail-MCP-Server/issues"
+    "url": "https://github.com/AeyeOps/Gmail-MCP-Server/issues"
   },
-  "homepage": "https://github.com/aeyeopsdev/Gmail-MCP-Server#readme",
+  "homepage": "https://github.com/AeyeOps/Gmail-MCP-Server#readme",
   "publishConfig": {
     "access": "public"
   },
