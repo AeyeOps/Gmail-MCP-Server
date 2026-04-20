@@ -3,6 +3,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 VERSION ?= v$(shell jq -r .version package.json)
+REPO := $(shell git config --get remote.origin.url | sed -E 's|^https://github\.com/||; s|^git@github\.com:||; s|\.git$$||')
 ENTRY := src/index.ts
 DIST := binaries
 BIN := gmail-mcp
@@ -30,8 +31,8 @@ build-binaries: clean  ## Build standalone bun binaries (linux-x64, linux-arm64,
 
 release: build-binaries  ## Build + publish GitHub Release (VERSION defaults to v<package.json>)
 	@command -v gh >/dev/null || { echo "gh CLI not installed"; exit 1; }
-	@if gh release view $(VERSION) >/dev/null 2>&1; then \
-		echo "release $(VERSION) already exists - delete with: gh release delete $(VERSION)"; \
+	@if gh release view --repo $(REPO) $(VERSION) >/dev/null 2>&1; then \
+		echo "release $(VERSION) already exists on $(REPO) - delete with: gh release delete --repo $(REPO) $(VERSION)"; \
 		exit 1; \
 	fi
-	gh release create $(VERSION) $(DIST)/$(BIN)-* --title "$(VERSION)" --generate-notes
+	gh release create --repo $(REPO) $(VERSION) $(DIST)/$(BIN)-* --title "$(VERSION)" --generate-notes
