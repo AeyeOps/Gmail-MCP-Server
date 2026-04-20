@@ -8,7 +8,7 @@ ENTRY := src/index.ts
 DIST := binaries
 BIN := gmail-mcp
 
-TARGETS := bun-linux-x64 bun-linux-arm64 bun-darwin-arm64
+TARGETS := bun-linux-x64 bun-linux-arm64 bun-darwin-arm64 bun-windows-x64
 
 .PHONY: help clean build-binaries release
 
@@ -23,7 +23,9 @@ build-binaries: clean  ## Build standalone bun binaries (linux-x64, linux-arm64,
 	@command -v bun >/dev/null || { echo "bun not installed - https://bun.sh/install"; exit 1; }
 	mkdir -p $(DIST)
 	@for t in $(TARGETS); do \
-		out="$(DIST)/$(BIN)-$${t#bun-}"; \
+		suffix=$${t#bun-}; \
+		ext=""; [[ "$$t" == *windows* ]] && ext=".exe"; \
+		out="$(DIST)/$(BIN)-$${suffix}$${ext}"; \
 		echo "==> $$out"; \
 		bun build --compile --target=$$t $(ENTRY) --outfile=$$out; \
 	done
