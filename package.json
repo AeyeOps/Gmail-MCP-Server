@@ -13,7 +13,8 @@
     "auth": "node dist/index.js auth",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build-and-install": "set -e; npm install; npm test; TARBALL=$(npm pack --silent); npm install -g \"$TARBALL\""
   },
   "files": [
     "dist",
