@@ -20,6 +20,7 @@ import {createEmailMessage, createEmailWithNodemailer} from "./utl.js";
 import { createLabel, updateLabel, deleteLabel, listLabels, findLabelByName, getOrCreateLabel, GmailLabel } from "./label-manager.js";
 import { createFilter, listFilters, getFilter, deleteFilter, filterTemplates, GmailFilterCriteria, GmailFilterAction } from "./filter-manager.js";
 import { resolveThreadHeaders, resolveReplyHeaders, extractMessageId } from "./threading.js";
+import { updateDraft, deleteDraft } from "./drafts.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -206,6 +207,14 @@ const SendEmailSchema = z.object({
     attachments: z.array(z.string()).optional().describe("List of file paths to attach to the email"),
 });
 
+const UpdateDraftSchema = SendEmailSchema.extend({
+    draftId: z.string().describe("The draft ID to update (from drafts.list or a prior draft_email response)"),
+});
+
+const DeleteDraftSchema = z.object({
+    draftId: z.string().describe("The draft ID to delete (from drafts.list or a prior draft_email response)"),
+});
+
 const ReadEmailSchema = z.object({
     messageId: z.string().describe("ID of the email message to retrieve"),
 });
@@ -354,6 +363,16 @@ async function main() {
                 name: "draft_email",
                 description: "Draft a new email",
                 inputSchema: zodToJsonSchema(SendEmailSchema),
+            },
+            {
+                name: "update_draft",
+                description: "Update an existing draft by ID. Replaces the draft content entirely (PUT semantics). Accepts the same fields as draft_email plus draftId. Note: threadId must be explicitly passed to preserve the draft's thread association; omitting it unthreads the draft.",
+                inputSchema: zodToJsonSchema(UpdateDraftSchema),
+            },
+            {
+                name: "delete_draft",
+                description: "Permanently deletes a draft by ID. Unlike delete_email (which requires full mail.google.com scope for permanent message deletion), delete_draft only needs gmail.modify and works on unsent drafts.",
+                inputSchema: zodToJsonSchema(DeleteDraftSchema),
             },
             {
                 name: "read_email",
@@ -621,6 +640,32 @@ async function main() {
                     const validatedArgs = SendEmailSchema.parse(args);
                     const action = name === "send_email" ? "send" : "draft";
                     return await handleEmailAction(action, validatedArgs);
+                }
+
+                case "update_draft": {
+                    const validatedArgs = UpdateDraftSchema.parse(args);
+                    const id = await updateDraft(gmail, validatedArgs);
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Email draft updated successfully with ID: ${id}`,
+                            },
+                        ],
+                    };
+                }
+
+                case "delete_draft": {
+                    const validatedArgs = DeleteDraftSchema.parse(args);
+                    await deleteDraft(gmail, validatedArgs.draftId);
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Email draft deleted successfully: ${validatedArgs.draftId}`,
+                            },
+                        ],
+                    };
                 }
 
                 case "read_email": {
