@@ -69,6 +69,14 @@ Invoke-WebRequest -UseBasicParsing `
 
 Make sure `~/.local/bin` (Linux/macOS) or `%USERPROFILE%\.local\bin` (Windows) is on your `PATH`.
 
+**Or, from a clone of this repo:**
+```bash
+make install                    # latest release into ~/.local/bin
+VERSION=v1.4.0 make install     # pin to a specific tag
+PREFIX=/opt/local make install  # install elsewhere
+```
+Picks the right asset for your host (Linux/macOS via `scripts/install.sh`, Windows via `scripts/install.ps1`).
+
 See [all releases](https://github.com/AeyeOps/Gmail-MCP-Server/releases) for previous versions.
 
 ### Option 2: Build from source (fallback)
