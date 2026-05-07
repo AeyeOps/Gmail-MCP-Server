@@ -10,7 +10,7 @@ BIN := gmail-mcp
 
 TARGETS := bun-linux-x64 bun-linux-arm64 bun-darwin-arm64 bun-windows-x64
 
-.PHONY: help clean build-binaries release
+.PHONY: help clean build-binaries release install
 
 help:  ## Show available targets
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -38,3 +38,10 @@ release: build-binaries  ## Build + publish GitHub Release (VERSION defaults to 
 		exit 1; \
 	fi
 	gh release create --repo $(REPO) $(VERSION) $(DIST)/$(BIN)-* --title "$(VERSION)" --generate-notes
+
+install:  ## Download released binary for this host (VERSION defaults to latest, PREFIX to ~/.local)
+ifeq ($(OS),Windows_NT)
+	@powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install.ps1
+else
+	@bash scripts/install.sh
+endif
