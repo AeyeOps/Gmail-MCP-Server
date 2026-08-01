@@ -504,9 +504,14 @@ async function main() {
                     }
                 }
 
-                // Check if we have attachments
-                if (validatedArgs.attachments && validatedArgs.attachments.length > 0) {
-                    // Use Nodemailer to create properly formatted RFC822 message
+                const useNodemailer = Boolean(
+                    validatedArgs.htmlBody ||
+                    (validatedArgs.attachments && validatedArgs.attachments.length > 0),
+                );
+
+                if (useNodemailer) {
+                    // Use Nodemailer for HTML and attachment messages so Gmail receives a
+                    // standards-compliant multipart RFC822 payload.
                     message = await createEmailWithNodemailer(validatedArgs);
                     
                     if (action === "send") {

@@ -136,7 +136,7 @@ export async function createEmailWithNodemailer(validatedArgs: any): Promise<str
 
     // Prepare attachments for nodemailer
     const attachments = [];
-    for (const filePath of validatedArgs.attachments) {
+    for (const filePath of validatedArgs.attachments ?? []) {
         if (!fs.existsSync(filePath)) {
             throw new Error(`File does not exist: ${filePath}`);
         }
@@ -179,4 +179,3 @@ export async function createEmailWithNodemailer(validatedArgs: any): Promise<str
     
     return rawMessage;
 }
-

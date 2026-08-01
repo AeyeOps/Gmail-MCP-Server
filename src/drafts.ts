@@ -28,7 +28,10 @@ export async function updateDraft(gmail: any, validatedArgs: any): Promise<strin
     }
 
     let message: string;
-    if (validatedArgs.attachments && validatedArgs.attachments.length > 0) {
+    if (
+        validatedArgs.htmlBody ||
+        (validatedArgs.attachments && validatedArgs.attachments.length > 0)
+    ) {
         message = await createEmailWithNodemailer(validatedArgs);
     } else {
         message = createEmailMessage(validatedArgs);

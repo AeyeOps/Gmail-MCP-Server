@@ -72,6 +72,23 @@ describe('updateDraft', () => {
         expect(result).toBe('returned-id-42');
     });
 
+    it('uses a standards-compliant multipart message for HTML drafts', async () => {
+        gmail.users.drafts.update.mockResolvedValue({ data: { id: 'draft-123' } });
+
+        await updateDraft(gmail, {
+            draftId: 'draft-123',
+            to: ['recipient@example.com'],
+            subject: 'HTML draft',
+            body: 'Plain text',
+            htmlBody: '<p>Rich text</p>',
+        });
+
+        const call = gmail.users.drafts.update.mock.calls[0][0];
+        const decoded = decodeRaw(call.requestBody.message.raw);
+        expect(decoded).toContain('Content-Type: multipart/alternative');
+        expect(decoded).toContain('<p>Rich text</p>');
+    });
+
     it('includes threadId in messageRequest when threadId is provided', async () => {
         gmail.users.drafts.update.mockResolvedValue({ data: { id: 'draft-123' } });
         // Empty thread → resolveThreadHeaders returns null, threadId flows through untouched.
