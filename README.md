@@ -72,7 +72,7 @@ Make sure `~/.local/bin` (Linux/macOS) or `%USERPROFILE%\.local\bin` (Windows) i
 **Or, from a clone of this repo:**
 ```bash
 make install                    # latest release into ~/.local/bin
-VERSION=v2.0.1 make install     # pin to a specific tag
+VERSION=v2.0.2 make install     # pin to a specific tag
 PREFIX=/opt/local make install  # install elsewhere
 ```
 Picks the right asset for your host (Linux/macOS via `scripts/install.sh`, Windows via `scripts/install.ps1`).

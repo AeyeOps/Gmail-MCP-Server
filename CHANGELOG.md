@@ -5,10 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.2] - 2026-10-31
 
 ### Fixed
 
+- The server told MCP clients it was version 1.0.0 in every release. It
+  now reports the package version from `src/version.ts`, which
+  `npm version` rewrites from `package.json`.
 - `make install` on Windows failed before downloading anything. Windows
   PowerShell 5.1 reads `scripts/install.ps1` in the ANSI code page, where
   an em dash in the script decoded to a closing double quote. The script
