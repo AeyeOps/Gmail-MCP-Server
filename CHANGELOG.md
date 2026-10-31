@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-10-31
+
+### Fixed
+
+- `create_label`, `update_label` and `get_or_create_label` printed
+  `Type: undefined` after creating or updating a label, because Gmail's create
+  and update responses omit the type. The label is now read back from Gmail
+  after the write, so the output shows its real type.
+- Corrected the 2.0.0 entry for `get_or_create_label`. It said the tool
+  always reported `found existing`. It reported correctly, by accident.
+
 ## [2.0.0] - 2026-10-31
 
 ### Changed
@@ -72,8 +83,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lookup of it also fails the call. `update_draft` uses the same lookups and
   fails the same way. The `send_email` and `draft_email` success text adds a
   second line, `Thread ID: <id>`.
-- `get_or_create_label` reported `found existing` for a label it had just
-  created. It now reports `created new` when it creates the label.
+- `get_or_create_label` now reports `created new` or `found existing` from an
+  explicit result. The earlier check read the label's type, which Gmail omits
+  from the create response, and reported correctly only by that accident.
 - `modify_email` dropped `labelIds` when `addLabelIds` was also given. It now
   applies both.
 
