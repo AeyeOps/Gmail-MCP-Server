@@ -2,7 +2,7 @@
 #
 # Env overrides:
 #   $env:VERSION  release tag  (default: latest)
-#   $env:PREFIX   install root (default: $env:USERPROFILE\.local — binary goes in $PREFIX\bin)
+#   $env:PREFIX   install root (default: $env:USERPROFILE\.local - binary goes in $PREFIX\bin)
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -52,5 +52,5 @@ try {
 Write-Host "installed: $Dest"
 $pathEntries = $env:PATH -split ';'
 if ($pathEntries -notcontains $BinDir) {
-    Write-Host "note: $BinDir is not on `$env:PATH — add it to use the bare 'gmail-mcp' command"
+    Write-Host "note: $BinDir is not on `$env:PATH - add it to use the bare 'gmail-mcp' command"
 }
