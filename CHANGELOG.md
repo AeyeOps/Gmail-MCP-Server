@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `make install` on Windows failed before downloading anything. Windows
+  PowerShell 5.1 reads `scripts/install.ps1` in the ANSI code page, where
+  an em dash in the script decoded to a closing double quote. The script
+  is now plain ASCII.
+- `make install` on Windows could not upgrade while an MCP client had
+  `gmail-mcp.exe` running. The installer now renames the running exe to
+  `gmail-mcp.exe.old` and installs the new one beside it. The old copy is
+  deleted right away when nothing runs it, otherwise by the next install.
+
 ## [2.0.1] - 2026-10-31
 
 ### Fixed
