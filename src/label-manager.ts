@@ -23,7 +23,7 @@ export interface GmailLabel {
  * @param gmail - Gmail API instance
  * @param labelName - Name of the label to create
  * @param options - Optional settings for the label
- * @returns The newly created label
+ * @returns The newly created label, read back from Gmail because the create response has no type
  */
 export async function createLabel(gmail: any, labelName: string, options: {
     messageListVisibility?: string;
@@ -43,7 +43,8 @@ export async function createLabel(gmail: any, labelName: string, options: {
             },
         });
 
-        return response.data;
+        const label = await gmail.users.labels.get({ userId: 'me', id: response.data.id });
+        return label.data;
     } catch (error: any) {
         // Handle duplicate labels more gracefully
         if (error.message && error.message.includes('already exists')) {
@@ -59,7 +60,7 @@ export async function createLabel(gmail: any, labelName: string, options: {
  * @param gmail - Gmail API instance
  * @param labelId - ID of the label to update
  * @param updates - Properties to update
- * @returns The updated label
+ * @returns The updated label, read back from Gmail because the update response has no type
  */
 export async function updateLabel(gmail: any, labelId: string, updates: {
     name?: string;
@@ -73,13 +74,14 @@ export async function updateLabel(gmail: any, labelId: string, updates: {
             id: labelId,
         });
 
-        const response = await gmail.users.labels.update({
+        await gmail.users.labels.update({
             userId: 'me',
             id: labelId,
             requestBody: updates,
         });
 
-        return response.data;
+        const label = await gmail.users.labels.get({ userId: 'me', id: labelId });
+        return label.data;
     } catch (error: any) {
         if (error.code === 404) {
             throw new Error(`Label with ID "${labelId}" not found.`);
