@@ -89,7 +89,7 @@ cd Gmail-MCP-Server
 npm run build-and-install   # runs tests, packs, then npm install -g the tarball
 ```
 
-The `gmail-mcp` binary ends up on your `$PATH` (via npm's global prefix). Requires Node 18+ and npm.
+The `gmail-mcp` binary ends up on your `$PATH` (via npm's global prefix). Requires Node 20+ and npm.
 
 ## Authentication
 

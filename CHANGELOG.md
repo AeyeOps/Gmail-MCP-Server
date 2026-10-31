@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Node 20 or later is now required (was 14 in `engines`, 18 in practice).
+  nodemailer 10.1.4, the first release that clears its open advisories,
+  needs Node 20.
+
+### Security
+
+- nodemailer 7 to 10.3.1. Several of the cleared advisories are in the
+  address parser that every HTML or attachment message goes through.
+- googleapis 129 to 150.0.1, past the uuid advisory in googleapis-common.
+  The OAuth client is now built with `google.auth.OAuth2`, the class googleapis
+  consumes, and the direct google-auth-library dependency is dropped.
+- @modelcontextprotocol/sdk 0.4 to 1.32.2. Server capabilities move to the
+  constructor's second argument. The zod range now starts at 3.25, as the SDK
+  requires.
+- vitest 2 to 4.1.12 for development.
+- In-range fixes from `npm audit fix`, including jws 4.0.1 and jwa 2.0.1. jwa
+  2.0.0 read `SlowBuffer`, which Node 26 removed, so the server crashed at
+  startup there.
+- Still open: zod (fixed in zod 4, which the eval harness's dependencies
+  cannot use), the `mcp-evals` chain (no fix released), and rimraf, glob and
+  minimatch under gaxios 7.1.3, which googleapis-common pins and nothing calls
+  at runtime.
+
 ### Fixed
 
 - `read_email` printed only From, To, Subject and Date. It now adds a
