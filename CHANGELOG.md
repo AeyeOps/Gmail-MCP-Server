@@ -29,8 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In-range fixes from `npm audit fix`, including jws 4.0.1 and jwa 2.0.1. jwa
   2.0.0 read `SlowBuffer`, which Node 26 removed, so the server crashed at
   startup there.
-- Still open: rimraf, glob and minimatch under gaxios 7.1.3, which
-  googleapis-common pins and nothing calls at runtime.
+- googleapis-common 8.0.3 pins gaxios 7.1.3, which carries rimraf, glob and
+  minimatch. An npm override moves that one pin to gaxios 7.1.4, the next
+  patch, which drops rimraf. All gaxios consumers now share 7.1.4, and
+  `npm audit` reports no vulnerabilities.
 
 ### Removed
 
