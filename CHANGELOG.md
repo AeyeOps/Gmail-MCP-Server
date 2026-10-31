@@ -21,16 +21,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The OAuth client is now built with `google.auth.OAuth2`, the class googleapis
   consumes, and the direct google-auth-library dependency is dropped.
 - @modelcontextprotocol/sdk 0.4 to 1.32.2. Server capabilities move to the
-  constructor's second argument. The zod range now starts at 3.25, as the SDK
-  requires.
+  constructor's second argument.
+- zod 3 to 4.6.7. Tool input schemas now come from zod's own
+  `z.toJSONSchema` in input mode, so fields with defaults stay optional, and
+  zod-to-json-schema is dropped.
 - vitest 2 to 4.1.12 for development.
 - In-range fixes from `npm audit fix`, including jws 4.0.1 and jwa 2.0.1. jwa
   2.0.0 read `SlowBuffer`, which Node 26 removed, so the server crashed at
   startup there.
-- Still open: zod (fixed in zod 4, which the eval harness's dependencies
-  cannot use), the `mcp-evals` chain (no fix released), and rimraf, glob and
-  minimatch under gaxios 7.1.3, which googleapis-common pins and nothing calls
-  at runtime.
+- Still open: rimraf, glob and minimatch under gaxios 7.1.3, which
+  googleapis-common pins and nothing calls at runtime.
+
+### Removed
+
+- The `mcp-evals` harness (`src/evals`) and its README section. It could not
+  run on zod 4, no `mcp-evals` release moves past `ai` 4, and its dependency
+  chain carried advisories with no fix.
 
 ### Fixed
 
