@@ -29,6 +29,7 @@ if ($Version -eq 'latest') {
 
 New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
 $tmp = [System.IO.Path]::GetTempFileName()
+$old = "$Dest.old"
 
 try {
     Write-Host "downloading $asset ($Version) -> $Dest"
@@ -43,6 +44,8 @@ try {
             Start-Sleep -Seconds 2
         }
     }
+    if (Test-Path $old) { Remove-Item -Force $old }
+    if (Test-Path $Dest) { Move-Item -Path $Dest -Destination $old }
     Move-Item -Force -Path $tmp -Destination $Dest
 } catch {
     Remove-Item -Force -ErrorAction SilentlyContinue $tmp
@@ -50,6 +53,13 @@ try {
 }
 
 Write-Host "installed: $Dest"
+if (Test-Path $old) {
+    try {
+        [System.IO.File]::Delete($old)
+    } catch [System.UnauthorizedAccessException] {
+        Write-Host "note: the previous gmail-mcp.exe is still running, left at $old for the next install to remove"
+    }
+}
 $pathEntries = $env:PATH -split ';'
 if ($pathEntries -notcontains $BinDir) {
     Write-Host "note: $BinDir is not on `$env:PATH - add it to use the bare 'gmail-mcp' command"
