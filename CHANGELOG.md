@@ -5,6 +5,78 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-10-31
+
+### Changed
+
+- Node 20 or later is now required (was 14 in `engines`, 18 in practice).
+  nodemailer 10.1.4, the first release that clears its open advisories,
+  needs Node 20.
+
+### Security
+
+- nodemailer 7 to 10.3.1. Several of the cleared advisories are in the
+  address parser that every HTML or attachment message goes through.
+- googleapis 129 to 150.0.1, past the uuid advisory in googleapis-common.
+  The OAuth client is now built with `google.auth.OAuth2`, the class googleapis
+  consumes, and the direct google-auth-library dependency is dropped.
+- @modelcontextprotocol/sdk 0.4 to 1.32.2. Server capabilities move to the
+  constructor's second argument.
+- zod 3 to 4.6.7. Tool input schemas now come from zod's own
+  `z.toJSONSchema` in input mode, so fields with defaults stay optional, and
+  zod-to-json-schema is dropped.
+- vitest 2 to 4.1.12 for development.
+- In-range fixes from `npm audit fix`, including jws 4.0.1 and jwa 2.0.1. jwa
+  2.0.0 read `SlowBuffer`, which Node 26 removed, so the server crashed at
+  startup there.
+- googleapis-common 8.0.3 pins gaxios 7.1.3, which carries rimraf, glob and
+  minimatch. An npm override moves that one pin to gaxios 7.1.4, the next
+  patch, which drops rimraf. All gaxios consumers now share 7.1.4, and
+  `npm audit` reports no vulnerabilities.
+
+### Removed
+
+- The `mcp-evals` harness (`src/evals`) and its README section. It could not
+  run on zod 4, no `mcp-evals` release moves past `ai` 4, and its dependency
+  chain carried advisories with no fix.
+
+### Fixed
+
+- `read_email` printed only From, To, Subject and Date. It now adds a
+  `Labels:` line with the message's label IDs after `Message-ID:`. Header
+  lines follow in this order: From, To, Cc, Bcc, Reply-To, Subject, Date. A
+  header the message does not have is left out.
+- `search_emails` printed only ID, Subject, From and Date. Each result now
+  lists `ID`, `Thread ID` and `Labels`, then the same header lines as
+  `read_email`. Drafts carry the `DRAFT` label. When more messages match than
+  `maxResults` returned, the output ends with a note saying so. When nothing
+  matches, it returns `No messages matched the query.` instead of empty text.
+- `list_drafts` returned a bare array of `{draftId, messageId, threadId}`. It
+  now returns `{"drafts": [...], "hasMore": bool}`. Each draft adds
+  `subject`, `to`, `cc` and `date` when the draft has them. `hasMore` is true
+  when more drafts match than `maxResults` returned.
+- All tools: a failure now returns `isError: true` with the text
+  `Error: <message>`. Failures previously came back as normal results, and
+  `download_attachment` used its own `Failed to download attachment:` text.
+- `download_attachment` overwrote an existing file of the same name. It now
+  fails with `EEXIST`. Without `filename`, it looked up the original name from
+  the attachment ID. Gmail issues new attachment IDs on every read, so the
+  lookup usually missed. The fallback name `attachment-<id>` then failed with
+  `ENAMETOOLONG`, because the ID runs to about 400 characters. It now fails
+  with the cause. Pass `filename`, the name `read_email` lists. A
+  filename taken from the message is reduced to its base name, so it cannot
+  point outside `savePath`.
+- `send_email` and `draft_email` logged a warning and sent or saved the
+  message unthreaded when the `threadId` lookup failed. They now fail. An
+  `inReplyTo` value without `@` is treated as a Gmail message ID, and a failed
+  lookup of it also fails the call. `update_draft` uses the same lookups and
+  fails the same way. The `send_email` and `draft_email` success text adds a
+  second line, `Thread ID: <id>`.
+- `get_or_create_label` reported `found existing` for a label it had just
+  created. It now reports `created new` when it creates the label.
+- `modify_email` dropped `labelIds` when `addLabelIds` was also given. It now
+  applies both.
+
 ## [1.4.0] - 2026-04-20
 
 ### Fixed

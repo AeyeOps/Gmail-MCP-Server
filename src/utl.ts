@@ -33,6 +33,18 @@ export function formatReferences(references: string | string[]): string {
     return formatMessageId(references);
 }
 
+export const DISPLAY_HEADERS = ['From', 'To', 'Cc', 'Bcc', 'Reply-To', 'Subject', 'Date'];
+
+export function formatHeaderLines(headers: Array<{ name?: string | null; value?: string | null }>): string {
+    return DISPLAY_HEADERS
+        .map(name => {
+            const value = headers.find(h => h.name?.toLowerCase() === name.toLowerCase())?.value;
+            return value == null ? null : `${name}: ${value}`;
+        })
+        .filter((line): line is string => line !== null)
+        .join('\n');
+}
+
 export const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);

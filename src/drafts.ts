@@ -77,11 +77,22 @@ export interface DraftSummary {
     draftId: string;
     messageId: string;
     threadId: string;
+    subject?: string;
+    to?: string;
+    cc?: string;
+    date?: string;
 }
 
+export interface DraftList {
+    drafts: DraftSummary[];
+    hasMore: boolean;
+}
+
+const SUMMARY_HEADERS = ['subject', 'to', 'cc', 'date'] as const;
+
 /**
- * List Gmail drafts, returning a simplified array of ids. The caller can then
- * fetch details via getDraft or act on the draft via update_draft / delete_draft.
+ * List Gmail drafts with their subject, recipients and date. `hasMore` is true
+ * when more drafts match than `maxResults` returned.
  *
  * `maxResults` defaults to 20 when omitted. `q` uses Gmail search syntax and
  * is passed through unchanged; omitting it lists all drafts (subject to
@@ -90,7 +101,7 @@ export interface DraftSummary {
 export async function listDrafts(
     gmail: any,
     args: { maxResults?: number; q?: string }
-): Promise<DraftSummary[]> {
+): Promise<DraftList> {
     const requestParams: { userId: string; maxResults: number; q?: string } = {
         userId: 'me',
         maxResults: args.maxResults ?? 20,
@@ -100,13 +111,29 @@ export async function listDrafts(
     }
 
     const response = await gmail.users.drafts.list(requestParams);
-    const drafts = response.data.drafts || [];
 
-    return drafts.map((draft: any) => ({
-        draftId: draft.id || '',
-        messageId: draft.message?.id || '',
-        threadId: draft.message?.threadId || '',
+    const drafts = await Promise.all((response.data.drafts || []).map(async (draft: any) => {
+        const detail = await gmail.users.messages.get({
+            userId: 'me',
+            id: draft.message.id,
+            format: 'metadata',
+            metadataHeaders: [...SUMMARY_HEADERS],
+        });
+        const summary: DraftSummary = {
+            draftId: draft.id,
+            messageId: draft.message.id,
+            threadId: draft.message.threadId,
+        };
+        for (const h of detail.data.payload?.headers || []) {
+            const name = (h.name || '').toLowerCase();
+            if ((SUMMARY_HEADERS as readonly string[]).includes(name) && h.value != null) {
+                summary[name as typeof SUMMARY_HEADERS[number]] = h.value;
+            }
+        }
+        return summary;
     }));
+
+    return { drafts, hasMore: Boolean(response.data.nextPageToken) };
 }
 
 export interface DraftAttachmentMeta {

@@ -1,7 +1,6 @@
 /**
  * Reply-threading helpers extracted from index.ts so they can be unit-tested
- * with a mocked gmail client. Behavior must match the original inline logic
- * exactly — see src/index.ts (send_email / read_email handlers).
+ * with a mocked gmail client. See src/index.ts (send_email / read_email handlers).
  *
  * The gmail client is typed as `any` deliberately: googleapis types are
  * cumbersome and the goal here is testability with vi.fn() mocks.
@@ -19,36 +18,31 @@ type HeaderLike = { name?: string | null; value?: string | null };
  * Returns `null` when:
  *   - the thread has no messages
  *   - no Message-ID header is found on any message
- *   - the fetch throws (a warning is logged, matching prior behavior)
+ * A failed fetch rejects, so a reply never goes out silently unthreaded.
  */
 export async function resolveThreadHeaders(
     gmail: any,
     threadId: string
 ): Promise<{ inReplyTo: string; references: string[] } | null> {
-    try {
-        const threadResponse = await gmail.users.threads.get({
-            userId: 'me',
-            id: threadId,
-            format: 'metadata',
-            metadataHeaders: ['Message-ID'],
-        });
+    const threadResponse = await gmail.users.threads.get({
+        userId: 'me',
+        id: threadId,
+        format: 'metadata',
+        metadataHeaders: ['Message-ID'],
+    });
 
-        const threadMessages = threadResponse.data.messages || [];
-        const threadMessageIds = threadMessages
-            .map((msg: any) => msg.payload?.headers?.find((h: HeaderLike) => h.name?.toLowerCase() === 'message-id')?.value)
-            .filter((value: string | undefined | null): value is string => Boolean(value));
+    const threadMessages = threadResponse.data.messages || [];
+    const threadMessageIds = threadMessages
+        .map((msg: any) => msg.payload?.headers?.find((h: HeaderLike) => h.name?.toLowerCase() === 'message-id')?.value)
+        .filter((value: string | undefined | null): value is string => Boolean(value));
 
-        if (threadMessageIds.length > 0) {
-            return {
-                inReplyTo: threadMessageIds[threadMessageIds.length - 1],
-                references: threadMessageIds,
-            };
-        }
-        return null;
-    } catch (threadError: any) {
-        console.warn(`Warning: Could not fetch thread ${threadId} for header resolution: ${threadError.message}`);
-        return null;
+    if (threadMessageIds.length > 0) {
+        return {
+            inReplyTo: threadMessageIds[threadMessageIds.length - 1],
+            references: threadMessageIds,
+        };
     }
+    return null;
 }
 
 /**
@@ -63,45 +57,44 @@ export async function resolveThreadHeaders(
  *     previous References exist
  *
  * Returns `null` when:
+ *   - `inReplyTo` is already an RFC Message-ID (it contains `@`)
  *   - Message-ID header is missing
- *   - the fetch throws (silently — matches prior behavior where a failed
- *     fetch is assumed to mean the caller already passed an RFC Message-ID)
+ * A failed fetch of a Gmail message id rejects.
  */
 export async function resolveReplyHeaders(
     gmail: any,
     inReplyTo: string
 ): Promise<{ inReplyTo: string; resolvedReferences: string } | null> {
-    try {
-        const replyToMsg = await gmail.users.messages.get({
-            userId: 'me',
-            id: inReplyTo,
-            format: 'metadata',
-            metadataHeaders: ['Message-ID', 'References'],
-        });
-
-        const headers = replyToMsg.data.payload?.headers || [];
-        const messageIdHeader = headers.find(
-            (h: HeaderLike) => h.name?.toLowerCase() === 'message-id'
-        )?.value;
-
-        if (!messageIdHeader) {
-            return null;
-        }
-
-        const prevReferences = headers.find(
-            (h: HeaderLike) => h.name?.toLowerCase() === 'references'
-        )?.value || '';
-
-        return {
-            inReplyTo: messageIdHeader,
-            resolvedReferences: prevReferences
-                ? `${prevReferences} ${messageIdHeader}`
-                : messageIdHeader,
-        };
-    } catch (e) {
-        // If fetch fails, inReplyTo might already be a Message-ID — continue as-is
+    if (inReplyTo.includes('@')) {
         return null;
     }
+
+    const replyToMsg = await gmail.users.messages.get({
+        userId: 'me',
+        id: inReplyTo,
+        format: 'metadata',
+        metadataHeaders: ['Message-ID', 'References'],
+    });
+
+    const headers = replyToMsg.data.payload?.headers || [];
+    const messageIdHeader = headers.find(
+        (h: HeaderLike) => h.name?.toLowerCase() === 'message-id'
+    )?.value;
+
+    if (!messageIdHeader) {
+        return null;
+    }
+
+    const prevReferences = headers.find(
+        (h: HeaderLike) => h.name?.toLowerCase() === 'references'
+    )?.value || '';
+
+    return {
+        inReplyTo: messageIdHeader,
+        resolvedReferences: prevReferences
+            ? `${prevReferences} ${messageIdHeader}`
+            : messageIdHeader,
+    };
 }
 
 /**

@@ -232,22 +232,40 @@ describe('listDrafts', () => {
         expect('q' in call).toBe(false);
     });
 
-    it('returns a simplified array mapping id/message.id/message.threadId', async () => {
+    it('returns ids, subject, recipients and date for each draft, and whether more exist', async () => {
         gmail.users.drafts.list.mockResolvedValue({
             data: {
                 drafts: [
                     { id: 'r-1', message: { id: 'm-1', threadId: 't-1' } },
                     { id: 'r-2', message: { id: 'm-2', threadId: 't-2' } },
                 ],
+                nextPageToken: 'next',
             },
         });
+        gmail.users.messages.get.mockImplementation(async ({ id }: { id: string }) => ({
+            data: msg(id === 'm-1'
+                ? [
+                    { name: 'Subject', value: 'First' },
+                    { name: 'To', value: 'a@example.com' },
+                    { name: 'Cc', value: 'b@example.com' },
+                    { name: 'Date', value: 'Fri, 30 Oct 2026 13:38:27 -0700' },
+                ]
+                : [{ name: 'Subject', value: 'Second' }]),
+        }));
 
         const result = await listDrafts(gmail, {});
 
-        expect(result).toEqual([
-            { draftId: 'r-1', messageId: 'm-1', threadId: 't-1' },
-            { draftId: 'r-2', messageId: 'm-2', threadId: 't-2' },
-        ]);
+        expect(result).toEqual({
+            drafts: [
+                {
+                    draftId: 'r-1', messageId: 'm-1', threadId: 't-1',
+                    subject: 'First', to: 'a@example.com', cc: 'b@example.com',
+                    date: 'Fri, 30 Oct 2026 13:38:27 -0700',
+                },
+                { draftId: 'r-2', messageId: 'm-2', threadId: 't-2', subject: 'Second' },
+            ],
+            hasMore: true,
+        });
     });
 
     it('propagates errors from gmail.users.drafts.list', async () => {

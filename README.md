@@ -72,7 +72,7 @@ Make sure `~/.local/bin` (Linux/macOS) or `%USERPROFILE%\.local\bin` (Windows) i
 **Or, from a clone of this repo:**
 ```bash
 make install                    # latest release into ~/.local/bin
-VERSION=v1.4.0 make install     # pin to a specific tag
+VERSION=v2.0.0 make install     # pin to a specific tag
 PREFIX=/opt/local make install  # install elsewhere
 ```
 Picks the right asset for your host (Linux/macOS via `scripts/install.sh`, Windows via `scripts/install.ps1`).
@@ -89,7 +89,7 @@ cd Gmail-MCP-Server
 npm run build-and-install   # runs tests, packs, then npm install -g the tarball
 ```
 
-The `gmail-mcp` binary ends up on your `$PATH` (via npm's global prefix). Requires Node 18+ and npm.
+The `gmail-mcp` binary ends up on your `$PATH` (via npm's global prefix). Requires Node 20+ and npm.
 
 ## Authentication
 
@@ -345,7 +345,7 @@ Updates an existing draft by ID. Replaces the draft content entirely (PUT semant
 ```
 
 ### 4. List Drafts (`list_drafts`)
-Lists drafts in the mailbox. Returns an array of `{draftId, messageId, threadId}`. Use `draftId` with `get_draft`, `update_draft`, or `delete_draft`. Supports Gmail search syntax via the optional `q` parameter.
+Lists drafts in the mailbox. Returns `{drafts: [{draftId, messageId, threadId, subject, to, cc, date}], hasMore}`. Use `draftId` with `get_draft`, `update_draft`, or `delete_draft`. Supports Gmail search syntax via the optional `q` parameter.
 
 ```json
 {
@@ -357,6 +357,26 @@ Lists drafts in the mailbox. Returns an array of `{draftId, messageId, threadId}
 Parameters:
 - `maxResults`: Maximum number of drafts to return (optional, defaults to 20)
 - `q`: Gmail search query to filter drafts (optional, same syntax as `search_emails`)
+
+Response:
+```json
+{
+  "drafts": [
+    {
+      "draftId": "r-1234567890",
+      "messageId": "182ab45cd67ef",
+      "threadId": "182ab45cd67ef",
+      "subject": "Draft Report",
+      "to": "recipient@example.com",
+      "cc": "manager@example.com",
+      "date": "Thu, 19 Jun 2025 10:30:00 -0400"
+    }
+  ],
+  "hasMore": false
+}
+```
+
+`subject`, `to`, `cc` and `date` appear only when the draft has them. `hasMore` is true when more drafts match than `maxResults` returned.
 
 ### 5. Get Draft (`get_draft`)
 Retrieves the full content of a draft by ID, including headers, body, and attachment metadata. Parallel to `read_email` but for unsent drafts.
@@ -385,11 +405,17 @@ Retrieves the content of a specific email by its ID. **Now shows enhanced attach
 }
 ```
 
+The response starts with the thread ID, the Message-ID and the message's label IDs. Header lines follow in this order: From, To, Cc, Bcc, Reply-To, Subject, Date. A header the message does not have is left out.
+
 **Enhanced Response includes attachment details:**
 ```
-Subject: Project Files
+Thread ID: 182ab45cd67ef
+Message-ID: <CAB1234567890@mail.example.com>
+Labels: INBOX, UNREAD
 From: sender@example.com
 To: recipient@example.com
+Cc: colleague@example.com
+Subject: Project Files
 Date: Thu, 19 Jun 2025 10:30:00 -0400
 
 Email body content here...
@@ -407,7 +433,7 @@ Attachments (2):
   "messageId": "182ab45cd67ef",
   "attachmentId": "ANGjdJ9fkTs-i3GCQo5o97f_itG...",
   "savePath": "/path/to/downloads",
-  "filename": "downloaded_document.pdf"
+  "filename": "document.pdf"
 }
 ```
 
@@ -415,7 +441,9 @@ Parameters:
 - `messageId`: The ID of the email containing the attachment
 - `attachmentId`: The attachment ID (shown in enhanced email display)
 - `savePath`: Directory to save the file (optional, defaults to current directory)
-- `filename`: Custom filename (optional, uses original filename if not provided)
+- `filename`: Name to save the file as (optional). Pass the name `read_email` lists. Gmail issues new attachment IDs on every read, so the original filename usually cannot be looked up from the ID. When it cannot, a call without `filename` fails and says why. A filename taken from the message is reduced to its base name.
+
+The tool never overwrites an existing file. If the file already exists in `savePath`, it fails with `EEXIST`.
 
 ### 9. Search Emails (`search_emails`)
 Searches for emails using Gmail search syntax.
@@ -426,6 +454,21 @@ Searches for emails using Gmail search syntax.
   "maxResults": 10
 }
 ```
+
+Each result lists `ID`, `Thread ID` and `Labels`, then the same header lines as `read_email`. Drafts carry the `DRAFT` label. A blank line separates results.
+
+Response:
+```
+ID: 182ab45cd67ef
+Thread ID: 182ab45cd67ef
+Labels: INBOX, UNREAD
+From: sender@example.com
+To: recipient@example.com
+Subject: Project Files
+Date: Thu, 19 Jun 2025 10:30:00 -0400
+```
+
+When more messages match than `maxResults` returned, the output ends with `More messages match than the N shown. Raise maxResults or narrow the query.` When nothing matches, it returns `No messages matched the query.`
 
 ### 10. Modify Email (`modify_email`)
 Adds or removes labels from emails (move to different folders, archive, etc.).
@@ -856,14 +899,6 @@ The server includes efficient batch processing capabilities:
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-
-## Running evals
-
-The evals package loads an mcp client that then runs the index.ts file, so there is no need to rebuild between tests. You can load environment variables by prefixing the npx command. Full documentation can be found [here](https://www.mcpevals.io/docs).
-
-```bash
-OPENAI_API_KEY=your-key  npx mcp-eval src/evals/evals.ts src/index.ts
-```
 
 ## License
 

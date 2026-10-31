@@ -6,7 +6,7 @@ This guide will help you install and configure the Gmail AutoAuth MCP server for
 
 ## Requirements
 
-- Node.js and npm installed
+- Node.js 20 or later, and npm
 - Access to create a Google Cloud Project
 - Local directory for configuration storage
 - Web browser for OAuth authentication

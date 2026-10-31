@@ -8,15 +8,13 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { google } from 'googleapis';
 import { z } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
-import { OAuth2Client } from 'google-auth-library';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import http from 'http';
 import open from 'open';
 import os from 'os';
-import {createEmailMessage, createEmailWithNodemailer} from "./utl.js";
+import {createEmailMessage, createEmailWithNodemailer, DISPLAY_HEADERS, formatHeaderLines} from "./utl.js";
 import { createLabel, updateLabel, deleteLabel, listLabels, findLabelByName, getOrCreateLabel, GmailLabel } from "./label-manager.js";
 import { createFilter, listFilters, getFilter, deleteFilter, filterTemplates, GmailFilterCriteria, GmailFilterAction } from "./filter-manager.js";
 import { resolveThreadHeaders, resolveReplyHeaders, extractMessageId } from "./threading.js";
@@ -59,7 +57,7 @@ interface EmailContent {
 }
 
 // OAuth2 configuration
-let oauth2Client: OAuth2Client;
+let oauth2Client: InstanceType<typeof google.auth.OAuth2>;
 
 /**
  * Recursively extract email body content from MIME message parts
@@ -129,7 +127,7 @@ async function loadCredentials() {
         ? process.argv[3] 
         : "http://localhost:3000/oauth2callback";
 
-        oauth2Client = new OAuth2Client(
+        oauth2Client = new google.auth.OAuth2(
             keys.client_id,
             keys.client_secret,
             callback
@@ -191,6 +189,8 @@ async function authenticate() {
         });
     });
 }
+
+const toInputSchema = (schema: z.ZodType) => z.toJSONSchema(schema, { io: 'input' });
 
 // Schema definitions
 const SendEmailSchema = z.object({
@@ -333,7 +333,7 @@ const CreateFilterFromTemplateSchema = z.object({
 const DownloadAttachmentSchema = z.object({
     messageId: z.string().describe("ID of the email message containing the attachment"),
     attachmentId: z.string().describe("ID of the attachment to download"),
-    filename: z.string().optional().describe("Filename to save the attachment as (if not provided, uses original filename)"),
+    filename: z.string().optional().describe("Filename to save the attachment as. Pass the name read_email lists: Gmail issues new attachment IDs on every read, so the original name usually cannot be looked up from the ID. Never overwrites an existing file."),
     savePath: z.string().optional().describe("Directory path to save the attachment (defaults to current directory)"),
 });
 
@@ -352,13 +352,17 @@ async function main() {
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
     // Server implementation
-    const server = new Server({
-        name: "gmail",
-        version: "1.0.0",
-        capabilities: {
-            tools: {},
+    const server = new Server(
+        {
+            name: "gmail",
+            version: "1.0.0",
         },
-    });
+        {
+            capabilities: {
+                tools: {},
+            },
+        },
+    );
 
     // Tool handlers
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -366,117 +370,117 @@ async function main() {
             {
                 name: "send_email",
                 description: "Sends a new email",
-                inputSchema: zodToJsonSchema(SendEmailSchema),
+                inputSchema: toInputSchema(SendEmailSchema),
             },
             {
                 name: "draft_email",
                 description: "Draft a new email",
-                inputSchema: zodToJsonSchema(SendEmailSchema),
+                inputSchema: toInputSchema(SendEmailSchema),
             },
             {
                 name: "update_draft",
                 description: "Update an existing draft by ID. Replaces the draft content entirely (PUT semantics). Accepts the same fields as draft_email plus draftId. Note: threadId must be explicitly passed to preserve the draft's thread association; omitting it unthreads the draft.",
-                inputSchema: zodToJsonSchema(UpdateDraftSchema),
+                inputSchema: toInputSchema(UpdateDraftSchema),
             },
             {
                 name: "delete_draft",
                 description: "Permanently deletes a draft by ID. Unlike delete_email (which moves messages to Trash), delete_draft removes the draft outright. Works on gmail.modify scope.",
-                inputSchema: zodToJsonSchema(DeleteDraftSchema),
+                inputSchema: toInputSchema(DeleteDraftSchema),
             },
             {
                 name: "list_drafts",
-                description: "Lists drafts in the mailbox. Returns an array of {draftId, messageId, threadId}. Use draftId with get_draft, update_draft, or delete_draft. Supports Gmail search syntax via optional q parameter.",
-                inputSchema: zodToJsonSchema(ListDraftsSchema),
+                description: "Lists drafts in the mailbox. Returns {drafts: [{draftId, messageId, threadId, subject, to, cc, date}], hasMore}; hasMore is true when more drafts match than maxResults returned. Use draftId with get_draft, update_draft, or delete_draft. Supports Gmail search syntax via optional q parameter.",
+                inputSchema: toInputSchema(ListDraftsSchema),
             },
             {
                 name: "get_draft",
                 description: "Retrieves the full content of a draft by ID, including headers, body, and attachment metadata. Parallel to read_email but for unsent drafts.",
-                inputSchema: zodToJsonSchema(GetDraftSchema),
+                inputSchema: toInputSchema(GetDraftSchema),
             },
             {
                 name: "read_email",
                 description: "Retrieves the content of a specific email",
-                inputSchema: zodToJsonSchema(ReadEmailSchema),
+                inputSchema: toInputSchema(ReadEmailSchema),
             },
             {
                 name: "search_emails",
                 description: "Searches for emails using Gmail search syntax",
-                inputSchema: zodToJsonSchema(SearchEmailsSchema),
+                inputSchema: toInputSchema(SearchEmailsSchema),
             },
             {
                 name: "modify_email",
                 description: "Modifies email labels (move to different folders)",
-                inputSchema: zodToJsonSchema(ModifyEmailSchema),
+                inputSchema: toInputSchema(ModifyEmailSchema),
             },
             {
                 name: "delete_email",
                 description: "Moves an email to Trash. Recoverable from Trash folder; Gmail auto-purges after 30 days. Uses gmail.modify scope (unlike permanent deletion which requires full mail.google.com access).",
-                inputSchema: zodToJsonSchema(DeleteEmailSchema),
+                inputSchema: toInputSchema(DeleteEmailSchema),
             },
             {
                 name: "list_email_labels",
                 description: "Retrieves all available Gmail labels",
-                inputSchema: zodToJsonSchema(ListEmailLabelsSchema),
+                inputSchema: toInputSchema(ListEmailLabelsSchema),
             },
             {
                 name: "batch_modify_emails",
                 description: "Modifies labels for multiple emails in batches",
-                inputSchema: zodToJsonSchema(BatchModifyEmailsSchema),
+                inputSchema: toInputSchema(BatchModifyEmailsSchema),
             },
             {
                 name: "batch_delete_emails",
                 description: "Moves multiple emails to Trash in batches. Recoverable from Trash; Gmail auto-purges after 30 days.",
-                inputSchema: zodToJsonSchema(BatchDeleteEmailsSchema),
+                inputSchema: toInputSchema(BatchDeleteEmailsSchema),
             },
             {
                 name: "create_label",
                 description: "Creates a new Gmail label",
-                inputSchema: zodToJsonSchema(CreateLabelSchema),
+                inputSchema: toInputSchema(CreateLabelSchema),
             },
             {
                 name: "update_label",
                 description: "Updates an existing Gmail label",
-                inputSchema: zodToJsonSchema(UpdateLabelSchema),
+                inputSchema: toInputSchema(UpdateLabelSchema),
             },
             {
                 name: "delete_label",
                 description: "Deletes a Gmail label",
-                inputSchema: zodToJsonSchema(DeleteLabelSchema),
+                inputSchema: toInputSchema(DeleteLabelSchema),
             },
             {
                 name: "get_or_create_label",
                 description: "Gets an existing label by name or creates it if it doesn't exist",
-                inputSchema: zodToJsonSchema(GetOrCreateLabelSchema),
+                inputSchema: toInputSchema(GetOrCreateLabelSchema),
             },
             {
                 name: "create_filter",
                 description: "Creates a new Gmail filter with custom criteria and actions",
-                inputSchema: zodToJsonSchema(CreateFilterSchema),
+                inputSchema: toInputSchema(CreateFilterSchema),
             },
             {
                 name: "list_filters",
                 description: "Retrieves all Gmail filters",
-                inputSchema: zodToJsonSchema(ListFiltersSchema),
+                inputSchema: toInputSchema(ListFiltersSchema),
             },
             {
                 name: "get_filter",
                 description: "Gets details of a specific Gmail filter",
-                inputSchema: zodToJsonSchema(GetFilterSchema),
+                inputSchema: toInputSchema(GetFilterSchema),
             },
             {
                 name: "delete_filter",
                 description: "Deletes a Gmail filter",
-                inputSchema: zodToJsonSchema(DeleteFilterSchema),
+                inputSchema: toInputSchema(DeleteFilterSchema),
             },
             {
                 name: "create_filter_from_template",
                 description: "Creates a filter using a pre-defined template for common scenarios",
-                inputSchema: zodToJsonSchema(CreateFilterFromTemplateSchema),
+                inputSchema: toInputSchema(CreateFilterFromTemplateSchema),
             },
             {
                 name: "download_attachment",
                 description: "Downloads an email attachment to a specified location",
-                inputSchema: zodToJsonSchema(DownloadAttachmentSchema),
+                inputSchema: toInputSchema(DownloadAttachmentSchema),
             },
         ],
     }))
@@ -532,7 +536,7 @@ async function main() {
                             content: [
                                 {
                                     type: "text",
-                                    text: `Email sent successfully with ID: ${result.data.id}`,
+                                    text: `Email sent successfully with ID: ${result.data.id}\nThread ID: ${result.data.threadId}`,
                                 },
                             ],
                         };
@@ -558,7 +562,7 @@ async function main() {
                             content: [
                                 {
                                     type: "text",
-                                    text: `Email draft created successfully with ID: ${response.data.id}`,
+                                    text: `Email draft created successfully with ID: ${response.data.id}\nThread ID: ${response.data.message?.threadId}`,
                                 },
                             ],
                         };
@@ -596,7 +600,7 @@ async function main() {
                             content: [
                                 {
                                     type: "text",
-                                    text: `Email sent successfully with ID: ${response.data.id}`,
+                                    text: `Email sent successfully with ID: ${response.data.id}\nThread ID: ${response.data.threadId}`,
                                 },
                             ],
                         };
@@ -611,7 +615,7 @@ async function main() {
                             content: [
                                 {
                                     type: "text",
-                                    text: `Email draft created successfully with ID: ${response.data.id}`,
+                                    text: `Email draft created successfully with ID: ${response.data.id}\nThread ID: ${response.data.message?.threadId}`,
                                 },
                             ],
                         };
@@ -736,12 +740,9 @@ async function main() {
                     });
 
                     const headers = response.data.payload?.headers || [];
-                    const subject = headers.find(h => h.name?.toLowerCase() === 'subject')?.value || '';
-                    const from = headers.find(h => h.name?.toLowerCase() === 'from')?.value || '';
-                    const to = headers.find(h => h.name?.toLowerCase() === 'to')?.value || '';
-                    const date = headers.find(h => h.name?.toLowerCase() === 'date')?.value || '';
                     const messageId = extractMessageId(headers);
                     const threadId = response.data.threadId || '';
+                    const labels = (response.data.labelIds || []).join(', ');
 
                     // Extract email content using the recursive function
                     const { text, html } = extractEmailContent(response.data.payload as GmailMessagePart || {});
@@ -787,7 +788,7 @@ async function main() {
                         content: [
                             {
                                 type: "text",
-                                text: `Thread ID: ${threadId}\nMessage-ID: ${messageId}\nSubject: ${subject}\nFrom: ${from}\nTo: ${to}\nDate: ${date}\n\n${contentTypeNote}${body}${attachmentInfo}`,
+                                text: `Thread ID: ${threadId}\nMessage-ID: ${messageId}\nLabels: ${labels}\n${formatHeaderLines(headers)}\n\n${contentTypeNote}${body}${attachmentInfo}`,
                             },
                         ],
                     };
@@ -802,31 +803,38 @@ async function main() {
                     });
 
                     const messages = response.data.messages || [];
+                    if (messages.length === 0) {
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: "No messages matched the query.",
+                                },
+                            ],
+                        };
+                    }
+
                     const results = await Promise.all(
                         messages.map(async (msg) => {
                             const detail = await gmail.users.messages.get({
                                 userId: 'me',
                                 id: msg.id!,
                                 format: 'metadata',
-                                metadataHeaders: ['Subject', 'From', 'Date'],
+                                metadataHeaders: DISPLAY_HEADERS,
                             });
-                            const headers = detail.data.payload?.headers || [];
-                            return {
-                                id: msg.id,
-                                subject: headers.find(h => h.name === 'Subject')?.value || '',
-                                from: headers.find(h => h.name === 'From')?.value || '',
-                                date: headers.find(h => h.name === 'Date')?.value || '',
-                            };
+                            const labels = (detail.data.labelIds || []).join(', ');
+                            return `ID: ${msg.id}\nThread ID: ${detail.data.threadId}\nLabels: ${labels}\n${formatHeaderLines(detail.data.payload?.headers || [])}\n`;
                         })
                     );
+                    const moreNote = response.data.nextPageToken
+                        ? `\nMore messages match than the ${messages.length} shown. Raise maxResults or narrow the query.`
+                        : '';
 
                     return {
                         content: [
                             {
                                 type: "text",
-                                text: results.map(r =>
-                                    `ID: ${r.id}\nSubject: ${r.subject}\nFrom: ${r.from}\nDate: ${r.date}\n`
-                                ).join('\n'),
+                                text: results.join('\n') + moreNote,
                             },
                         ],
                     };
@@ -838,15 +846,12 @@ async function main() {
                     
                     // Prepare request body
                     const requestBody: any = {};
-                    
-                    if (validatedArgs.labelIds) {
-                        requestBody.addLabelIds = validatedArgs.labelIds;
+
+                    const addLabelIds = [...new Set([...(validatedArgs.labelIds ?? []), ...(validatedArgs.addLabelIds ?? [])])];
+                    if (addLabelIds.length > 0) {
+                        requestBody.addLabelIds = addLabelIds;
                     }
-                    
-                    if (validatedArgs.addLabelIds) {
-                        requestBody.addLabelIds = validatedArgs.addLabelIds;
-                    }
-                    
+
                     if (validatedArgs.removeLabelIds) {
                         requestBody.removeLabelIds = validatedArgs.removeLabelIds;
                     }
@@ -1062,18 +1067,18 @@ async function main() {
 
                 case "get_or_create_label": {
                     const validatedArgs = GetOrCreateLabelSchema.parse(args);
-                    const result = await getOrCreateLabel(gmail, validatedArgs.name, {
+                    const { label, created } = await getOrCreateLabel(gmail, validatedArgs.name, {
                         messageListVisibility: validatedArgs.messageListVisibility,
                         labelListVisibility: validatedArgs.labelListVisibility,
                     });
 
-                    const action = result.type === 'user' && result.name === validatedArgs.name ? 'found existing' : 'created new';
-                    
+                    const action = created ? 'created new' : 'found existing';
+
                     return {
                         content: [
                             {
                                 type: "text",
-                                text: `Successfully ${action} label:\nID: ${result.id}\nName: ${result.name}\nType: ${result.type}`,
+                                text: `Successfully ${action} label:\nID: ${label.id}\nName: ${label.name}\nType: ${label.type}`,
                             },
                         ],
                     };
@@ -1232,79 +1237,65 @@ async function main() {
                 }
                 case "download_attachment": {
                     const validatedArgs = DownloadAttachmentSchema.parse(args);
-                    
-                    try {
-                        // Get the attachment data from Gmail API
-                        const attachmentResponse = await gmail.users.messages.attachments.get({
+
+                    const attachmentResponse = await gmail.users.messages.attachments.get({
+                        userId: 'me',
+                        messageId: validatedArgs.messageId,
+                        id: validatedArgs.attachmentId,
+                    });
+
+                    if (!attachmentResponse.data.data) {
+                        throw new Error('No attachment data received');
+                    }
+
+                    const data = attachmentResponse.data.data;
+                    const buffer = Buffer.from(data, 'base64url');
+
+                    const savePath = validatedArgs.savePath || process.cwd();
+                    let filename = validatedArgs.filename;
+
+                    if (!filename) {
+                        const messageResponse = await gmail.users.messages.get({
                             userId: 'me',
-                            messageId: validatedArgs.messageId,
-                            id: validatedArgs.attachmentId,
+                            id: validatedArgs.messageId,
+                            format: 'full',
                         });
 
-                        if (!attachmentResponse.data.data) {
-                            throw new Error('No attachment data received');
-                        }
-
-                        // Decode the base64 data
-                        const data = attachmentResponse.data.data;
-                        const buffer = Buffer.from(data, 'base64url');
-
-                        // Determine save path and filename
-                        const savePath = validatedArgs.savePath || process.cwd();
-                        let filename = validatedArgs.filename;
-                        
-                        if (!filename) {
-                            // Get original filename from message if not provided
-                            const messageResponse = await gmail.users.messages.get({
-                                userId: 'me',
-                                id: validatedArgs.messageId,
-                                format: 'full',
-                            });
-                            
-                            // Find the attachment part to get original filename
-                            const findAttachment = (part: any): string | null => {
-                                if (part.body && part.body.attachmentId === validatedArgs.attachmentId) {
-                                    return part.filename || `attachment-${validatedArgs.attachmentId}`;
+                        const findAttachment = (part: any): string | null => {
+                            if (part.body && part.body.attachmentId === validatedArgs.attachmentId) {
+                                return part.filename || null;
+                            }
+                            if (part.parts) {
+                                for (const subpart of part.parts) {
+                                    const found = findAttachment(subpart);
+                                    if (found) return found;
                                 }
-                                if (part.parts) {
-                                    for (const subpart of part.parts) {
-                                        const found = findAttachment(subpart);
-                                        if (found) return found;
-                                    }
-                                }
-                                return null;
-                            };
-                            
-                            filename = findAttachment(messageResponse.data.payload) || `attachment-${validatedArgs.attachmentId}`;
-                        }
-
-                        // Ensure save directory exists
-                        if (!fs.existsSync(savePath)) {
-                            fs.mkdirSync(savePath, { recursive: true });
-                        }
-
-                        // Write file
-                        const fullPath = path.join(savePath, filename);
-                        fs.writeFileSync(fullPath, buffer);
-
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: `Attachment downloaded successfully:\nFile: ${filename}\nSize: ${buffer.length} bytes\nSaved to: ${fullPath}`,
-                                },
-                            ],
+                            }
+                            return null;
                         };
-                    } catch (error: any) {
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: `Failed to download attachment: ${error.message}`,
-                                },
-                            ],
-                        };
+
+                        const originalName = findAttachment(messageResponse.data.payload);
+                        if (!originalName) {
+                            throw new Error('Could not look up the original filename: Gmail issues new attachment IDs on every read, so this ID usually matches no part of the message. Pass filename.');
+                        }
+                        filename = path.basename(originalName);
                     }
+
+                    if (!fs.existsSync(savePath)) {
+                        fs.mkdirSync(savePath, { recursive: true });
+                    }
+
+                    const fullPath = path.join(savePath, filename);
+                    fs.writeFileSync(fullPath, buffer, { flag: 'wx' });
+
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Attachment downloaded successfully:\nFile: ${filename}\nSize: ${buffer.length} bytes\nSaved to: ${fullPath}`,
+                            },
+                        ],
+                    };
                 }
 
                 default:
@@ -1318,6 +1309,7 @@ async function main() {
                         text: `Error: ${error.message}`,
                     },
                 ],
+                isError: true,
             };
         }
     });
