@@ -19,6 +19,7 @@ import { createLabel, updateLabel, deleteLabel, listLabels, findLabelByName, get
 import { createFilter, listFilters, getFilter, deleteFilter, filterTemplates, GmailFilterCriteria, GmailFilterAction } from "./filter-manager.js";
 import { resolveThreadHeaders, resolveReplyHeaders, extractMessageId } from "./threading.js";
 import { updateDraft, deleteDraft, listDrafts, getDraft } from "./drafts.js";
+import { VERSION } from "./version.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -355,7 +356,7 @@ async function main() {
     const server = new Server(
         {
             name: "gmail",
-            version: "1.0.0",
+            version: VERSION,
         },
         {
             capabilities: {
