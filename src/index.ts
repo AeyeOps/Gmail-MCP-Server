@@ -9,7 +9,6 @@ import {
 import { google } from 'googleapis';
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { OAuth2Client } from 'google-auth-library';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -59,7 +58,7 @@ interface EmailContent {
 }
 
 // OAuth2 configuration
-let oauth2Client: OAuth2Client;
+let oauth2Client: InstanceType<typeof google.auth.OAuth2>;
 
 /**
  * Recursively extract email body content from MIME message parts
@@ -129,7 +128,7 @@ async function loadCredentials() {
         ? process.argv[3] 
         : "http://localhost:3000/oauth2callback";
 
-        oauth2Client = new OAuth2Client(
+        oauth2Client = new google.auth.OAuth2(
             keys.client_id,
             keys.client_secret,
             callback
