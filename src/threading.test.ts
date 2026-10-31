@@ -116,16 +116,10 @@ describe('resolveThreadHeaders', () => {
         expect(result).toBeNull();
     });
 
-    it('returns null and logs a warning when the API call rejects', async () => {
-        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('rejects when the API call rejects', async () => {
         gmail.users.threads.get.mockRejectedValue(new Error('boom'));
 
-        const result = await resolveThreadHeaders(gmail, 'thread-error');
-
-        expect(result).toBeNull();
-        expect(warnSpy).toHaveBeenCalled();
-
-        warnSpy.mockRestore();
+        await expect(resolveThreadHeaders(gmail, 'thread-error')).rejects.toThrow('boom');
     });
 });
 
@@ -193,19 +187,10 @@ describe('resolveReplyHeaders', () => {
         expect(result).toBeNull();
     });
 
-    it('returns null without logging when the API call rejects', async () => {
-        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    it('rejects when the API call rejects for a Gmail message id', async () => {
         gmail.users.messages.get.mockRejectedValue(new Error('fetch failed'));
 
-        const result = await resolveReplyHeaders(gmail, 'gmail-internal-id');
-
-        expect(result).toBeNull();
-        expect(warnSpy).not.toHaveBeenCalled();
-        expect(errorSpy).not.toHaveBeenCalled();
-
-        warnSpy.mockRestore();
-        errorSpy.mockRestore();
+        await expect(resolveReplyHeaders(gmail, 'gmail-internal-id')).rejects.toThrow('fetch failed');
     });
 
     it('calls gmail.users.messages.get with the exact expected argument shape', async () => {
