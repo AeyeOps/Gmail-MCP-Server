@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `read_email` printed only From, To, Subject and Date. It now adds a
+  `Labels:` line with the message's label IDs after `Message-ID:`. Header
+  lines follow in this order: From, To, Cc, Bcc, Reply-To, Subject, Date. A
+  header the message does not have is left out.
+- `search_emails` printed only ID, Subject, From and Date. Each result now
+  lists `ID`, `Thread ID` and `Labels`, then the same header lines as
+  `read_email`. Drafts carry the `DRAFT` label. When more messages match than
+  `maxResults` returned, the output ends with a note saying so. When nothing
+  matches, it returns `No messages matched the query.` instead of empty text.
+- `list_drafts` returned a bare array of `{draftId, messageId, threadId}`. It
+  now returns `{"drafts": [...], "hasMore": bool}`. Each draft adds
+  `subject`, `to`, `cc` and `date` when the draft has them. `hasMore` is true
+  when more drafts match than `maxResults` returned.
+- All tools: a failure now returns `isError: true` with the text
+  `Error: <message>`. Failures previously came back as normal results, and
+  `download_attachment` used its own `Failed to download attachment:` text.
+- `download_attachment` overwrote an existing file of the same name. It now
+  fails with `EEXIST`. Without `filename`, it looked up the original name from
+  the attachment ID. Gmail issues new attachment IDs on every read, so the
+  lookup usually missed. The fallback name `attachment-<id>` then failed with
+  `ENAMETOOLONG`, because the ID runs to about 400 characters. It now fails
+  with the cause. Pass `filename`, the name `read_email` lists. A
+  filename taken from the message is reduced to its base name, so it cannot
+  point outside `savePath`.
+- `send_email` and `draft_email` logged a warning and sent or saved the
+  message unthreaded when the `threadId` lookup failed. They now fail. An
+  `inReplyTo` value without `@` is treated as a Gmail message ID, and a failed
+  lookup of it also fails the call. `update_draft` uses the same lookups and
+  fails the same way. The `send_email` and `draft_email` success text adds a
+  second line, `Thread ID: <id>`.
+- `get_or_create_label` reported `found existing` for a label it had just
+  created. It now reports `created new` when it creates the label.
+- `modify_email` dropped `labelIds` when `addLabelIds` was also given. It now
+  applies both.
+
 ## [1.4.0] - 2026-04-20
 
 ### Fixed
