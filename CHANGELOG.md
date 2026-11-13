@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-11-12
+
+### Fixed
+
+- A reply sent or drafted with only a `threadId` answered the last message
+  Gmail returned for the thread, whatever it was. When that was an emoji
+  reaction, Gmail did not show the draft in the conversation, because it
+  shows a reaction as an emoji on another message and not as a message. When
+  it was an unsent draft, the reply answered a message nobody had received,
+  and `update_draft` with only a `threadId` made a draft answer its own
+  earlier copy. A trashed message could be chosen the same way. The reply
+  now answers the last message a reply can answer, and drafts, trashed
+  messages and emoji reactions stay out of `References`. A thread with no
+  such message gets no reply headers.
+
 ## [2.0.2] - 2026-10-31
 
 ### Fixed
