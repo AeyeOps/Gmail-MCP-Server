@@ -16,10 +16,14 @@ function createMockGmail() {
 }
 
 /**
- * Build a gmail-style payload for a single message, with optional headers.
+ * Build a gmail-style message in the full format: headers, plus optional
+ * labels and MIME parts.
  */
-function msg(headers: Array<{ name: string; value: string }>) {
-    return { payload: { headers } };
+function msg(
+    headers: Array<{ name: string; value: string }>,
+    extra: { labelIds?: string[]; parts?: unknown[] } = {}
+) {
+    return { labelIds: extra.labelIds, payload: { headers, parts: extra.parts } };
 }
 
 describe('resolveThreadHeaders', () => {
@@ -29,13 +33,31 @@ describe('resolveThreadHeaders', () => {
         gmail = createMockGmail();
     });
 
-    it('returns ordered references and last Message-ID as inReplyTo for a 3-message thread', async () => {
+    it('returns the last message a reply can answer, skipping a reaction, a trashed message and a draft', async () => {
         gmail.users.threads.get.mockResolvedValue({
             data: {
                 messages: [
-                    msg([{ name: 'Message-ID', value: '<msg1@mail.com>' }]),
-                    msg([{ name: 'Message-ID', value: '<msg2@mail.com>' }]),
-                    msg([{ name: 'Message-ID', value: '<msg3@mail.com>' }]),
+                    msg([{ name: 'Message-ID', value: '<msg1@mail.com>' }], { labelIds: ['INBOX'] }),
+                    msg([{ name: 'Message-ID', value: '<msg2@mail.com>' }], { labelIds: ['SENT'] }),
+                    msg([{ name: 'Message-ID', value: '<msg3@mail.com>' }], {
+                        labelIds: ['INBOX'],
+                        parts: [{ mimeType: 'text/plain' }, { mimeType: 'text/html' }],
+                    }),
+                    msg([{ name: 'Message-ID', value: '<reaction@mail.com>' }], {
+                        labelIds: ['SENT'],
+                        parts: [
+                            {
+                                mimeType: 'multipart/alternative',
+                                parts: [
+                                    { mimeType: 'text/plain' },
+                                    { mimeType: 'text/vnd.google.email-reaction+json' },
+                                    { mimeType: 'text/html' },
+                                ],
+                            },
+                        ],
+                    }),
+                    msg([{ name: 'Message-ID', value: '<trashed@mail.com>' }], { labelIds: ['TRASH'] }),
+                    msg([{ name: 'Message-ID', value: '<draft@mail.com>' }], { labelIds: ['DRAFT'] }),
                 ],
             },
         });
@@ -61,8 +83,7 @@ describe('resolveThreadHeaders', () => {
         expect(gmail.users.threads.get).toHaveBeenCalledWith({
             userId: 'me',
             id: 'thread-xyz',
-            format: 'metadata',
-            metadataHeaders: ['Message-ID'],
+            format: 'full',
         });
     });
 

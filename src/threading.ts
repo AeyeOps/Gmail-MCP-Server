@@ -7,17 +7,40 @@
  */
 
 type HeaderLike = { name?: string | null; value?: string | null };
+type PartLike = { mimeType?: string | null; parts?: PartLike[] | null };
+
+const REACTION_MIME_TYPE = 'text/vnd.google.email-reaction+json';
+
+function hasReactionPart(part: PartLike | null | undefined): boolean {
+    if (!part) {
+        return false;
+    }
+    return part.mimeType === REACTION_MIME_TYPE || (part.parts || []).some(hasReactionPart);
+}
+
+/**
+ * True for a thread message a reply can answer. Gmail returns three kinds
+ * that a reply cannot answer: an unsent draft, a trashed message, and an
+ * emoji reaction, which is a message carrying a
+ * `text/vnd.google.email-reaction+json` part that Gmail shows as an emoji on
+ * the message it reacts to instead of as a message of its own.
+ */
+function isReplyTarget(msg: any): boolean {
+    const labelIds: string[] = msg.labelIds || [];
+    return !labelIds.includes('DRAFT') && !labelIds.includes('TRASH') && !hasReactionPart(msg.payload);
+}
 
 /**
  * Resolve In-Reply-To / References headers from a threadId alone.
  *
- * Fetches the thread metadata (Message-ID headers only), collects every
- * Message-ID in order, and returns the last one as `inReplyTo` plus the
- * full ordered list as `references`.
+ * Fetches the thread in full, because only the full format carries the MIME
+ * tree that marks a reaction. Keeps the messages a reply can answer (see
+ * `isReplyTarget`), and returns the last of their Message-IDs as `inReplyTo`
+ * plus their ordered list as `references`.
  *
  * Returns `null` when:
- *   - the thread has no messages
- *   - no Message-ID header is found on any message
+ *   - the thread has no message a reply can answer
+ *   - no Message-ID header is found on any of them
  * A failed fetch rejects, so a reply never goes out silently unthreaded.
  */
 export async function resolveThreadHeaders(
@@ -27,11 +50,10 @@ export async function resolveThreadHeaders(
     const threadResponse = await gmail.users.threads.get({
         userId: 'me',
         id: threadId,
-        format: 'metadata',
-        metadataHeaders: ['Message-ID'],
+        format: 'full',
     });
 
-    const threadMessages = threadResponse.data.messages || [];
+    const threadMessages = (threadResponse.data.messages || []).filter(isReplyTarget);
     const threadMessageIds = threadMessages
         .map((msg: any) => msg.payload?.headers?.find((h: HeaderLike) => h.name?.toLowerCase() === 'message-id')?.value)
         .filter((value: string | undefined | null): value is string => Boolean(value));
